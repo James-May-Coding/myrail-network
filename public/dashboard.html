@@ -3,11 +3,52 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard - Railway Job Board</title>
-<link href="main.css" rel="stylesheet">
+<title>Railway Dashboard</title>
+<script type="module" src="/dashboard.js"></script>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+.hidden { display: none; }
+.card { border: 1px solid #ccc; padding: 12px; margin: 8px 0; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; }
+.card img { width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; }
+.btn { padding: 6px 12px; border-radius: 4px; margin-left: 4px; cursor: pointer; }
+.btn-accept { background: #4ade80; color: white; }
+.btn-deny { background: #f87171; color: white; }
+.btn-create { background: #60a5fa; color: white; }
+.btn-claim { background: #facc15; color: black; }
+.btn-admin { background: #a78bfa; color: white; }
+section { margin-bottom: 24px; }
+</style>
 </head>
 <body>
-<div id="root"></div>
-<script type="module" src="/src/app.js"></script>
+
+<h1>Railway Dashboard</h1>
+
+<section>
+<h2>Pending Invites</h2>
+<div id="invites-container"></div>
+</section>
+
+<section>
+<h2>Communities</h2>
+<div id="communities-container"></div>
+<button id="new-community-btn" class="btn btn-create">Create New Community</button>
+<div id="community-modal" class="hidden card">
+<input type="text" id="community-name" placeholder="Community Name" />
+<input type="text" id="community-guild" placeholder="Guild ID" />
+<input type="text" id="community-pfp" placeholder="Profile Picture URL" />
+<button id="create-community-btn" class="btn btn-create">Create</button>
+</div>
+</section>
+
+<section>
+<h2>Train Jobs</h2>
+<table border="1" width="100%">
+<thead>
+<tr><th>Code</th><th>Route</th><th>Engineer</th><th>Conductor</th><th>Status</th><th>Action</th></tr>
+</thead>
+<tbody id="trains-container"></tbody>
+</table>
+</section>
+
 </body>
 </html>
