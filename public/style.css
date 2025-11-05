@@ -89,6 +89,7 @@
     transform: scale(1.02);
   }
   
+  /* Button color classes */
   .bg-blue-500 { background-color: #3b82f6; color: #fff; }
   .bg-green-500 { background-color: #22c55e; color: #fff; }
   .bg-red-500 { background-color: #ef4444; color: #fff; }
@@ -209,6 +210,46 @@
   }
   
   /* =======================
+     Login Page
+  ======================= */
+  .login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  
+  .login-box {
+    background-color: #fff;
+    padding: 2rem;
+    border-radius: 0.5rem;
+    width: 100%;
+    max-width: 24rem;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    text-align: center;
+  }
+  
+  .login-box h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  
+  .login-box a {
+    display: inline-block;
+    margin-top: 1rem;
+    background-color: #3b82f6;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+  }
+  
+  .login-box a:hover {
+    background-color: #2563eb;
+  }
+  
+  /* =======================
      Responsive tweaks
   ======================= */
   @media (max-width: 768px) {
@@ -217,6 +258,9 @@
     }
     table {
       font-size: 0.75rem;
+    }
+    .login-box {
+      padding: 1.5rem;
     }
   }
   
