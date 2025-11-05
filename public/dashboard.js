@@ -1,10 +1,4 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-
-// --- Use Vite/Vercel frontend env ---
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
+// --- Dashboard.js for Vercel + API routes ---
 let currentUser = null;
 
 // --- Load Discord session ---
@@ -13,20 +7,15 @@ async function loadSession() {
   const data = await res.json();
   if (!data.user) window.location.href = '/index.html';
   currentUser = data.user;
-  // Optional: fetch role from community_members for admin
-  const { data: member } = await supabase.from('community_members').select('role').eq('user_id', currentUser.id).single();
-  currentUser.role = member?.role || 'member';
 }
 await loadSession();
 
-// --- Pending Invites ---
+// --- ---------------- Pending Invites ---------------- ---
 async function loadInvites() {
-  const { data: invites } = await supabase
-    .from('community_invites')
-    .select('id, community_id, status, communities(name, pfp)')
-    .eq('user_id', currentUser.id)
-    .eq('status', 'pending');
-
+  const res = await fetch('/api/invites', {
+    headers: { 'x-user-id': currentUser.id }
+  });
+  const invites = await res.json();
   const container = document.getElementById('invites-container');
   container.innerHTML = '';
 
@@ -44,39 +33,41 @@ async function loadInvites() {
     container.appendChild(div);
   });
 
-  // --- Accept/Deny handlers ---
   document.querySelectorAll('.btn-accept').forEach(btn =>
     btn.addEventListener('click', async e => {
-      const inviteId = e.target.dataset.id;
-      const { data: invite } = await supabase
-        .from('community_invites')
-        .update({ status: 'accepted' })
-        .eq('id', inviteId)
-        .select()
-        .single();
-      await supabase.from('community_members').insert({ community_id: invite.community_id, user_id: currentUser.id, role: 'member' });
-      await loadInvites(); await loadCommunities();
+      const id = e.target.dataset.id;
+      await fetch('/api/invites', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id },
+        body: JSON.stringify({ id, status: 'accepted' })
+      });
+      await loadInvites();
+      await loadCommunities();
     })
   );
 
   document.querySelectorAll('.btn-deny').forEach(btn =>
     btn.addEventListener('click', async e => {
-      const inviteId = e.target.dataset.id;
-      await supabase.from('community_invites').update({ status: 'denied' }).eq('id', inviteId);
+      const id = e.target.dataset.id;
+      await fetch('/api/invites', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id },
+        body: JSON.stringify({ id, status: 'denied' })
+      });
       await loadInvites();
     })
   );
 }
 
-// --- Communities ---
+// --- ---------------- Communities ---------------- ---
 async function loadCommunities() {
-  const { data: communities } = await supabase
-    .from('community_members')
-    .select('community_id, role, communities(name, pfp)')
-    .eq('user_id', currentUser.id);
-
+  const res = await fetch('/api/communities', {
+    headers: { 'x-user-id': currentUser.id, 'x-user-role': currentUser.role }
+  });
+  const communities = await res.json();
   const container = document.getElementById('communities-container');
   container.innerHTML = '';
+
   communities.forEach(c => {
     const div = document.createElement('div');
     div.classList.add('card');
@@ -89,23 +80,36 @@ async function loadCommunities() {
   });
 }
 
-// --- Create new community ---
+// --- Create new community modal ---
 document.getElementById('new-community-btn').addEventListener('click', () => {
   document.getElementById('community-modal').classList.toggle('hidden');
 });
 document.getElementById('create-community-btn').addEventListener('click', async () => {
   const name = document.getElementById('community-name').value;
-  const guildId = document.getElementById('community-guild').value;
+  const guild_id = document.getElementById('community-guild').value;
   const pfp = document.getElementById('community-pfp').value;
-  if (!name || !guildId) return alert('Name and Guild ID required');
-  await supabase.from('communities').insert({ name, guild_id: guildId, pfp, owner_id: currentUser.id });
+  if (!name || !guild_id) return alert('Name and Guild ID required');
+
+  await fetch('/api/communities', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id, 'x-user-role': currentUser.role },
+    body: JSON.stringify({ name, guild_id, pfp })
+  });
+
   document.getElementById('community-modal').classList.add('hidden');
   await loadCommunities();
 });
 
-// --- Load Trains ---
+// --- ---------------- Trains ---------------- ---
+async function fetchTrains() {
+  const res = await fetch('/api/trains', {
+    headers: { 'x-user-id': currentUser.id, 'x-user-role': currentUser.role }
+  });
+  return await res.json();
+}
+
 async function loadTrains() {
-  const { data: trains } = await supabase.from('trains').select('*');
+  const trains = await fetchTrains();
   const tbody = document.getElementById('trains-container');
   tbody.innerHTML = '';
 
@@ -125,20 +129,27 @@ async function loadTrains() {
     tbody.appendChild(tr);
   });
 
-  // --- Claim trains ---
+  // Claim train
   document.querySelectorAll('.btn-claim').forEach(btn =>
     btn.addEventListener('click', async e => {
       const id = e.target.dataset.id;
-      await supabase.from('trains').update({ status: 'claimed', engineer: currentUser.username }).eq('id', id);
+      await fetch('/api/trains', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id, 'x-user-role': currentUser.role },
+        body: JSON.stringify({ id, updates: { status: 'claimed', engineer: currentUser.username } })
+      });
       await loadTrains();
     })
   );
 
-  // --- Admin edit train ---
+  // Admin edit train
   document.querySelectorAll('.edit-btn').forEach(btn =>
     btn.addEventListener('click', async e => {
       const id = e.target.dataset.id;
-      const { data: train } = await supabase.from('trains').select('*').eq('id', id).single();
+      const train = (await fetch('/api/trains', {
+        headers: { 'x-user-id': currentUser.id, 'x-user-role': currentUser.role }
+      }).then(r => r.json())).find(t => t.id === parseInt(id));
+
       document.getElementById('train-id').value = train.id;
       document.getElementById('train-code').value = train.code;
       document.getElementById('train-route').value = train.route;
@@ -153,13 +164,20 @@ async function loadTrains() {
 // --- Save admin train changes ---
 document.getElementById('save-train-btn').addEventListener('click', async () => {
   const id = document.getElementById('train-id').value;
-  const code = document.getElementById('train-code').value;
-  const route = document.getElementById('train-route').value;
-  const engineer = document.getElementById('train-engineer').value;
-  const conductor = document.getElementById('train-conductor').value;
-  const status = document.getElementById('train-status').value;
+  const updates = {
+    code: document.getElementById('train-code').value,
+    route: document.getElementById('train-route').value,
+    engineer: document.getElementById('train-engineer').value,
+    conductor: document.getElementById('train-conductor').value,
+    status: document.getElementById('train-status').value
+  };
 
-  await supabase.from('trains').update({ code, route, engineer, conductor, status }).eq('id', id);
+  await fetch('/api/trains', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id, 'x-user-role': currentUser.role },
+    body: JSON.stringify({ id, updates })
+  });
+
   document.getElementById('train-modal').classList.add('hidden');
   await loadTrains();
 });
@@ -173,7 +191,3 @@ document.getElementById('close-train-modal').addEventListener('click', () => {
 loadInvites();
 loadCommunities();
 loadTrains();
-
-// --- Live updates ---
-supabase.from(`community_invites:user_id=eq.${currentUser.id}`).on('*', loadInvites).subscribe();
-supabase.from('trains').on('*', loadTrains).subscribe();

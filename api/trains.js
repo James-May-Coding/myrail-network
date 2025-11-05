@@ -1,38 +1,49 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(process.env.REACT_APP_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 export default async function handler(req, res) {
-  const cookie = req.headers.cookie;
-  if (!cookie) return res.status(403).json({ error: 'Not logged in' });
-  const match = cookie.match(/session=([^;]+)/);
-  if (!match) return res.status(403).json({ error: 'Not logged in' });
-  const user = JSON.parse(decodeURIComponent(match[1]));
+  try {
+    const user = req.headers['x-user-id'];
+    const role = req.headers['x-user-role']; // sent from frontend cookie/session
 
-  if (req.method === 'GET') {
-    const { data } = await supabase.from('trains').select('*');
-    return res.json(data.map(t => ({ ...t, crew: t.crew || [] })));
-  }
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  if (req.method === 'POST') {
-    const { trainId } = req.body;
-    const { data } = await supabase.from('trains').select('*').eq('id', trainId).single();
-    const updatedCrew = [...(data.crew || []), user.username];
-    await supabase.from('trains').update({ crew: updatedCrew }).eq('id', trainId);
-    return res.json({ success: true });
-  }
+    switch(req.method) {
+      case 'GET': {
+        // Admin sees all, staff/member sees only allowed trains
+        let query = supabase.from('trains').select('*');
+        if (role !== 'admin') {
+          query = query.eq('status', 'open'); // members/staff see only open trains
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return res.json(data);
+      }
+      case 'PATCH': {
+        const { id, updates } = req.body;
+        if (!id) return res.status(400).json({ error: 'Missing train ID' });
+        if (role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
 
-  if (req.method === 'PUT') {
-    const { trainId, name, direction } = req.body;
-    await supabase.from('trains').update({ name, direction }).eq('id', trainId);
-    return res.json({ success: true });
-  }
-
-  if (req.method === 'DELETE') {
-    const { trainId } = req.body;
-    const { data } = await supabase.from('trains').select('*').eq('id', trainId).single();
-    const updatedCrew = (data.crew || []).filter(u => u !== user.username);
-    await supabase.from('trains').update({ crew: updatedCrew }).eq('id', trainId);
-    return res.json({ success: true });
+        const { data, error } = await supabase.from('trains').update(updates).eq('id', id);
+        if (error) throw error;
+        return res.json(data);
+      }
+      case 'POST': {
+        if (role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+        const { code, route } = req.body;
+        const { data, error } = await supabase.from('trains').insert({ code, route });
+        if (error) throw error;
+        return res.json(data);
+      }
+      default:
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
   }
 }
