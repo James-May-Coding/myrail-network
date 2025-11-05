@@ -2,6 +2,7 @@
     "name": "railway-jobboard",
     "version": "1.0.0",
     "private": true,
+    "type": "module",
     "scripts": {
       "build:css": "tailwindcss -i ./src/input.css -o ./public/main.css --minify",
       "dev": "vercel dev"
