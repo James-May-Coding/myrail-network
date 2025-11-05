@@ -1,19 +1,22 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-// --- Supabase init ---
+// --- Initialize Supabase ---
 const supabase = createClient('YOUR_SUPABASE_URL', 'YOUR_SUPABASE_ANON_KEY');
 let currentUser = null;
 
-// --- Load session ---
+// --- Load Discord session ---
 async function loadSession() {
   const res = await fetch('/api/auth/session');
   const data = await res.json();
   if (!data.user) window.location.href = '/index.html';
-  else currentUser = data.user;
+  currentUser = data.user;
+  // Optional: fetch role from community_members for admin
+  const { data: member } = await supabase.from('community_members').select('role').eq('user_id', currentUser.id).single();
+  currentUser.role = member?.role || 'member';
 }
 await loadSession();
 
-// --- Load invites ---
+// --- Pending Invites ---
 async function loadInvites() {
   const { data: invites } = await supabase
     .from('community_invites')
@@ -38,6 +41,7 @@ async function loadInvites() {
     container.appendChild(div);
   });
 
+  // --- Accept/Deny handlers ---
   document.querySelectorAll('.btn-accept').forEach(btn =>
     btn.addEventListener('click', async e => {
       const inviteId = e.target.dataset.id;
@@ -48,7 +52,7 @@ async function loadInvites() {
         .select()
         .single();
       await supabase.from('community_members').insert({ community_id: invite.community_id, user_id: currentUser.id, role: 'member' });
-      await loadInvites(); loadCommunities();
+      await loadInvites(); await loadCommunities();
     })
   );
 
@@ -61,7 +65,7 @@ async function loadInvites() {
   );
 }
 
-// --- Load communities ---
+// --- Communities ---
 async function loadCommunities() {
   const { data: communities } = await supabase
     .from('community_members')
@@ -82,7 +86,7 @@ async function loadCommunities() {
   });
 }
 
-// --- Create community ---
+// --- Create new community ---
 document.getElementById('new-community-btn').addEventListener('click', () => {
   document.getElementById('community-modal').classList.toggle('hidden');
 });
@@ -96,11 +100,12 @@ document.getElementById('create-community-btn').addEventListener('click', async 
   await loadCommunities();
 });
 
-// --- Load trains/jobs ---
+// --- Load Trains ---
 async function loadTrains() {
   const { data: trains } = await supabase.from('trains').select('*');
   const tbody = document.getElementById('trains-container');
   tbody.innerHTML = '';
+
   trains.forEach(t => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -109,11 +114,15 @@ async function loadTrains() {
       <td>${t.engineer || '-'}</td>
       <td>${t.conductor || '-'}</td>
       <td>${t.status}</td>
-      <td>${t.status === 'open' ? `<button class="btn btn-claim" data-id="${t.id}">Claim</button>` : '-'}</td>
+      <td>
+        ${t.status === 'open' ? `<button class="btn btn-claim" data-id="${t.id}">Claim</button>` : '-'}
+        ${currentUser.role === 'admin' ? `<button class="btn btn-admin edit-btn" data-id="${t.id}">Edit</button>` : ''}
+      </td>
     `;
     tbody.appendChild(tr);
   });
 
+  // --- Claim trains ---
   document.querySelectorAll('.btn-claim').forEach(btn =>
     btn.addEventListener('click', async e => {
       const id = e.target.dataset.id;
@@ -121,13 +130,47 @@ async function loadTrains() {
       await loadTrains();
     })
   );
+
+  // --- Admin edit train ---
+  document.querySelectorAll('.edit-btn').forEach(btn =>
+    btn.addEventListener('click', async e => {
+      const id = e.target.dataset.id;
+      const { data: train } = await supabase.from('trains').select('*').eq('id', id).single();
+      document.getElementById('train-id').value = train.id;
+      document.getElementById('train-code').value = train.code;
+      document.getElementById('train-route').value = train.route;
+      document.getElementById('train-engineer').value = train.engineer || '';
+      document.getElementById('train-conductor').value = train.conductor || '';
+      document.getElementById('train-status').value = train.status;
+      document.getElementById('train-modal').classList.remove('hidden');
+    })
+  );
 }
+
+// --- Save admin train changes ---
+document.getElementById('save-train-btn').addEventListener('click', async () => {
+  const id = document.getElementById('train-id').value;
+  const code = document.getElementById('train-code').value;
+  const route = document.getElementById('train-route').value;
+  const engineer = document.getElementById('train-engineer').value;
+  const conductor = document.getElementById('train-conductor').value;
+  const status = document.getElementById('train-status').value;
+
+  await supabase.from('trains').update({ code, route, engineer, conductor, status }).eq('id', id);
+  document.getElementById('train-modal').classList.add('hidden');
+  await loadTrains();
+});
+
+// --- Close train modal ---
+document.getElementById('close-train-modal').addEventListener('click', () => {
+  document.getElementById('train-modal').classList.add('hidden');
+});
 
 // --- Initial load ---
 loadInvites();
 loadCommunities();
 loadTrains();
 
-// --- Live updates (optional) ---
+// --- Live updates ---
 supabase.from(`community_invites:user_id=eq.${currentUser.id}`).on('*', loadInvites).subscribe();
 supabase.from('trains').on('*', loadTrains).subscribe();

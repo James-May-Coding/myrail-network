@@ -17,22 +17,25 @@ body { font-family: Arial, sans-serif; margin: 20px; }
 .btn-claim { background: #facc15; color: black; }
 .btn-admin { background: #a78bfa; color: white; }
 section { margin-bottom: 24px; }
+input, select { margin: 4px 0; padding: 4px; width: 100%; box-sizing: border-box; }
 </style>
 </head>
 <body>
 
 <h1>Railway Dashboard</h1>
 
+<!-- Pending Invites -->
 <section>
 <h2>Pending Invites</h2>
 <div id="invites-container"></div>
 </section>
 
+<!-- Communities -->
 <section>
 <h2>Communities</h2>
 <div id="communities-container"></div>
 <button id="new-community-btn" class="btn btn-create">Create New Community</button>
-<div id="community-modal" class="hidden card">
+<div id="community-modal" class="hidden card" style="flex-direction: column;">
 <input type="text" id="community-name" placeholder="Community Name" />
 <input type="text" id="community-guild" placeholder="Guild ID" />
 <input type="text" id="community-pfp" placeholder="Profile Picture URL" />
@@ -40,6 +43,7 @@ section { margin-bottom: 24px; }
 </div>
 </section>
 
+<!-- Train Jobs -->
 <section>
 <h2>Train Jobs</h2>
 <table border="1" width="100%">
@@ -49,6 +53,22 @@ section { margin-bottom: 24px; }
 <tbody id="trains-container"></tbody>
 </table>
 </section>
+
+<!-- Train Admin Modal -->
+<div id="train-modal" class="hidden card" style="flex-direction: column;">
+<h3>Edit Train</h3>
+<input type="hidden" id="train-id" />
+<input type="text" id="train-code" placeholder="Code" />
+<input type="text" id="train-route" placeholder="Route" />
+<input type="text" id="train-engineer" placeholder="Engineer" />
+<input type="text" id="train-conductor" placeholder="Conductor" />
+<select id="train-status">
+  <option value="open">Open</option>
+  <option value="claimed">Claimed</option>
+</select>
+<button id="save-train-btn" class="btn btn-create">Save Changes</button>
+<button id="close-train-modal" class="btn btn-deny">Close</button>
+</div>
 
 </body>
 </html>
