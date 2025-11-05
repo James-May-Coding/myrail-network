@@ -1,194 +1,193 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+import { supabase } from './supabase.js';
 
-const supabaseUrl = "https://dmjazdpluclinainckit.supabase.co";
-const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtamF6ZHBsdWNsaW5haW5ja2l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyOTYyNDEsImV4cCI6MjA3Nzg3MjI0MX0.BtKwm3wds62gOrabC5lY4561zawTdT_f-o9_frO2TRk";
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// DOM Elements
+const userDisplay = document.getElementById('user-display');
+const trainsContainer = document.getElementById('trains-container');
+const invitesContainer = document.getElementById('invites-container');
+const communitiesContainer = document.getElementById('communities-container');
+const communityModal = document.getElementById('community-modal');
+const createCommunityBtn = document.getElementById('create-community-btn');
 
+// Current logged-in user
 let currentUser = null;
 
-// --- Session ---
-async function loadSession() {
-  const res = await fetch('/api/auth/session');
-  const data = await res.json();
-  if (!data.user) window.location.href = '/index.html';
+// ------------------------
+// 1️⃣ Get current user
+// ------------------------
+async function getCurrentUser() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    console.error('No user logged in', error);
+    return;
+  }
   currentUser = data.user;
-  document.getElementById('user-display').innerText = currentUser.username;
-}
-await loadSession();
-
-// --- Invites ---
-async function loadInvites() {
-  const res = await fetch('/api/invites', {
-    headers: { 'x-user-id': currentUser.id }
-  });
-  const invites = await res.json();
-  const container = document.getElementById('invites-container');
-  container.innerHTML = '';
-
-  invites.forEach(invite => {
-    const div = document.createElement('div');
-    div.classList.add('p-2', 'bg-white', 'rounded', 'flex', 'justify-between', 'items-center');
-    div.innerHTML = `
-      <div class="flex items-center gap-2">
-        <img src="${invite.communities.pfp}" class="w-8 h-8 rounded"/>
-        <span>${invite.communities.name}</span>
-      </div>
-      <div class="flex gap-2">
-        <button class="btn-accept bg-green-500 text-white px-2 py-1 rounded" data-id="${invite.id}">Accept</button>
-        <button class="btn-deny bg-red-500 text-white px-2 py-1 rounded" data-id="${invite.id}">Deny</button>
-      </div>
-    `;
-    container.appendChild(div);
-  });
-
-  document.querySelectorAll('.btn-accept').forEach(btn =>
-    btn.addEventListener('click', async e => {
-      await fetch('/api/invites', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id },
-        body: JSON.stringify({ id: e.target.dataset.id, status: 'accepted' })
-      });
-      await loadInvites();
-      await loadCommunities();
-    })
-  );
-  document.querySelectorAll('.btn-deny').forEach(btn =>
-    btn.addEventListener('click', async e => {
-      await fetch('/api/invites', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id },
-        body: JSON.stringify({ id: e.target.dataset.id, status: 'denied' })
-      });
-      await loadInvites();
-    })
-  );
+  userDisplay.textContent = currentUser.email || 'Unknown User';
 }
 
-// --- Communities ---
-async function loadCommunities() {
-  const res = await fetch('/api/communities', {
-    headers: { 'x-user-id': currentUser.id, 'x-user-role': currentUser.role }
-  });
-  const communities = await res.json();
-  const container = document.getElementById('communities-container');
-  container.innerHTML = '';
-  communities.forEach(c => {
-    const div = document.createElement('div');
-    div.classList.add('p-2', 'bg-white', 'rounded', 'flex', 'justify-between', 'items-center');
-    div.innerHTML = `
-      <div class="flex items-center gap-2">
-        <img src="${c.communities.pfp}" class="w-8 h-8 rounded"/>
-        <span>${c.communities.name} (${c.role})</span>
-      </div>
-      ${c.role==='admin'?'<button class="btn-admin bg-blue-500 text-white px-2 py-1 rounded">Admin</button>':''}
-    `;
-    container.appendChild(div);
-  });
-}
-
-// --- New Community ---
-document.getElementById('new-community-btn').addEventListener('click', ()=>document.getElementById('community-modal').classList.toggle('hidden'));
-document.getElementById('create-community-btn').addEventListener('click', async () => {
-  const name = document.getElementById('community-name').value;
-  const guild_id = document.getElementById('community-guild').value;
-  const pfp = document.getElementById('community-pfp').value || '';
-  if (!name || !guild_id) return alert('Name and Guild ID required');
-
-  await fetch('/api/communities', {
-    method:'POST',
-    headers:{'Content-Type':'application/json','x-user-id':currentUser.id,'x-user-role':currentUser.role},
-    body: JSON.stringify({name,guild_id,pfp})
-  });
-
-  document.getElementById('community-modal').classList.add('hidden');
-  document.getElementById('community-name').value='';
-  document.getElementById('community-guild').value='';
-  document.getElementById('community-pfp').value='';
-  await loadCommunities();
-});
-
-// --- Trains ---
+// ------------------------
+// 2️⃣ Load Trains
+// ------------------------
 async function loadTrains() {
-  const res = await fetch('/api/trains', {
-    headers:{'x-user-id':currentUser.id,'x-user-role':currentUser.role}
-  });
-  const trains = await res.json();
-  const tbody = document.getElementById('trains-container');
-  tbody.innerHTML = '';
+  const { data: trains, error } = await supabase
+    .from('trains')
+    .select('*')
+    .order('id', { ascending: true });
 
-  trains.forEach(t=>{
+  if (error) return console.error(error);
+
+  trainsContainer.innerHTML = '';
+  trains.forEach(t => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="border px-2 py-1">${t.code}</td>
-      <td class="border px-2 py-1">${t.route}</td>
-      <td class="border px-2 py-1">${t.engineer||'-'}</td>
-      <td class="border px-2 py-1">${t.conductor||'-'}</td>
-      <td class="border px-2 py-1">${t.status}</td>
-      <td class="border px-2 py-1">
-        ${t.status==='open'?`<button class="btn-claim bg-green-500 text-white px-2 py-1 rounded" data-id="${t.id}">Claim</button>`:''}
-        ${currentUser.role==='admin'?`<button class="edit-btn bg-blue-500 text-white px-2 py-1 rounded" data-id="${t.id}">Edit</button>`:''}
+      <td>${t.code}</td>
+      <td>${t.route}</td>
+      <td>${t.engineer || '-'}</td>
+      <td>${t.conductor || '-'}</td>
+      <td>${t.status}</td>
+      <td>
+        ${t.status === 'open' ? `<button class="btn-claim" data-id="${t.id}">Claim</button>` : ''}
+        ${currentUser?.role === 'admin' ? `<button class="edit-btn" data-id="${t.id}">Edit</button>` : ''}
       </td>
     `;
-    tbody.appendChild(tr);
+    trainsContainer.appendChild(tr);
   });
 
-  // Claim
-  document.querySelectorAll('.btn-claim').forEach(btn=>{
-    btn.addEventListener('click', async e=>{
-      await fetch('/api/trains',{
-        method:'PATCH',
-        headers:{'Content-Type':'application/json','x-user-id':currentUser.id,'x-user-role':currentUser.role},
-        body: JSON.stringify({id:e.target.dataset.id, updates:{status:'claimed', engineer:currentUser.username}})
-      });
-      await loadTrains();
-    })
+  // Add claim buttons event
+  document.querySelectorAll('.btn-claim').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const trainId = e.target.dataset.id;
+      await claimTrain(trainId);
+    });
   });
 
-  // Admin edit
-  document.querySelectorAll('.edit-btn').forEach(btn=>{
-    btn.addEventListener('click', async e=>{
-      const id=e.target.dataset.id;
-      const train = trains.find(t=>t.id==id);
-      document.getElementById('train-id').value=train.id;
-      document.getElementById('train-code').value=train.code;
-      document.getElementById('train-route').value=train.route;
-      document.getElementById('train-engineer').value=train.engineer||'';
-      document.getElementById('train-conductor').value=train.conductor||'';
-      document.getElementById('train-status').value=train.status;
-      document.getElementById('train-modal').classList.remove('hidden');
-    })
-  })
+  // Add edit buttons event (admins)
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const trainId = e.target.dataset.id;
+      editTrain(trainId);
+    });
+  });
 }
 
-// --- Save Train ---
-document.getElementById('save-train-btn').addEventListener('click', async ()=>{
-  const id=document.getElementById('train-id').value;
-  const updates={
-    code:document.getElementById('train-code').value,
-    route:document.getElementById('train-route').value,
-    engineer:document.getElementById('train-engineer').value,
-    conductor:document.getElementById('train-conductor').value,
-    status:document.getElementById('train-status').value
-  };
-  await fetch('/api/trains',{
-    method:'PATCH',
-    headers:{'Content-Type':'application/json','x-user-id':currentUser.id,'x-user-role':currentUser.role},
-    body:JSON.stringify({id, updates})
+// ------------------------
+// 3️⃣ Claim Train
+// ------------------------
+async function claimTrain(trainId) {
+  const field = currentUser.role === 'staff' ? 'engineer' : 'conductor';
+  const updates = {};
+  updates[field] = currentUser.email;
+
+  const { error } = await supabase
+    .from('trains')
+    .update(updates)
+    .eq('id', trainId);
+
+  if (error) return console.error('Failed to claim train:', error);
+}
+
+// ------------------------
+// 4️⃣ Edit Train (Admin Only)
+// ------------------------
+function editTrain(trainId) {
+  const newEngineer = prompt('Enter Engineer username:');
+  const newConductor = prompt('Enter Conductor username:');
+
+  supabase
+    .from('trains')
+    .update({ engineer: newEngineer, conductor: newConductor })
+    .eq('id', trainId)
+    .then(({ error }) => {
+      if (error) console.error(error);
+    });
+}
+
+// ------------------------
+// 5️⃣ Load Communities & Invites
+// ------------------------
+async function loadCommunities() {
+  const { data: communities, error } = await supabase
+    .from('communities')
+    .select('*');
+
+  if (error) return console.error(error);
+
+  communitiesContainer.innerHTML = '';
+  communities.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'community-card';
+    div.innerHTML = `
+      <img src="${c.pfp}" alt="PF">
+      <span>${c.name}</span>
+      ${c.members?.includes(currentUser?.id) ? '<span>Joined</span>' : `<button class="join-community-btn" data-id="${c.id}">Join</button>`}
+    `;
+    communitiesContainer.appendChild(div);
   });
-  document.getElementById('train-modal').classList.add('hidden');
-  await loadTrains();
+
+  document.querySelectorAll('.join-community-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const communityId = e.target.dataset.id;
+      await joinCommunity(communityId);
+    });
+  });
+}
+
+// ------------------------
+// 6️⃣ Join Community
+// ------------------------
+async function joinCommunity(communityId) {
+  const { data: community, error } = await supabase
+    .from('communities')
+    .select('members')
+    .eq('id', communityId)
+    .single();
+
+  if (error) return console.error(error);
+
+  const members = community.members || [];
+  if (!members.includes(currentUser.id)) members.push(currentUser.id);
+
+  await supabase.from('communities').update({ members }).eq('id', communityId);
+}
+
+// ------------------------
+// 7️⃣ Real-Time Updates
+// ------------------------
+supabase
+  .from('trains')
+  .on('*', payload => loadTrains())
+  .subscribe();
+
+supabase
+  .from('communities')
+  .on('*', payload => loadCommunities())
+  .subscribe();
+
+// ------------------------
+// 8️⃣ Create Community Modal
+// ------------------------
+createCommunityBtn.addEventListener('click', () => {
+  communityModal.classList.add('show');
 });
-document.getElementById('close-train-modal').addEventListener('click',()=>document.getElementById('train-modal').classList.add('hidden'));
 
-// --- Real-time subscriptions ---
-const trainsChannel = supabase.from('trains').on('*', payload=>{
-  loadTrains();
-}).subscribe();
+communityModal.querySelector('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = e.target.name.value;
+  const guildId = e.target.guildId.value;
+  const pfp = e.target.pfp.value;
 
-const communitiesChannel = supabase.from('communities').on('*', payload=>{
-  loadCommunities();
-}).subscribe();
+  await supabase.from('communities').insert([{ name, guild_id: guildId, pfp, members: [currentUser.id] }]);
 
-await loadInvites();
-await loadCommunities();
-await loadTrains();
+  communityModal.classList.remove('show');
+  e.target.reset();
+});
+
+// ------------------------
+// 9️⃣ Initialize
+// ------------------------
+async function init() {
+  await getCurrentUser();
+  await loadTrains();
+  await loadCommunities();
+}
+
+init();
