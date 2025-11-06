@@ -82,7 +82,12 @@
 
   </section>
 </main>
-
+<script>
+    window._env = {
+        SUPABASE_URL: "{{VITE_SUPABASE_URL}}",
+        SUPABASE_ANON_KEY: "{{VITE_SUPABASE_ANON_KEY}}"
+    };
+    </script>
 <script type="module" src="./dashboard.js"></script>
 </body>
 </html>
