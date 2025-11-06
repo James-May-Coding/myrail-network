@@ -1,7 +1,17 @@
-// src/supabase.js
-import { createClient } from '@supabase/supabase-js';
+// supabase.js
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = window._env?.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = window._env?.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.error("Supabase ENV missing in window._env");
+}
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+        persistSession: true,
+        storage: localStorage,
+        detectSessionInUrl: true
+    }
+});

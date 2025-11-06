@@ -1,34 +1,39 @@
-import { createClient } from '@supabase/supabase-js';
-const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+// api/communities.js
+import { getSupabaseService, parseSessionCookie } from './_utils.js';
 
-export default async function handler(req, res) {
-  const user = req.headers['x-user-id'];
-  const role = req.headers['x-user-role'];
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+export default async function handler(req,res) {
+  const supa = getSupabaseService();
+  const session = parseSessionCookie(req);
+  if(!session) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    switch(req.method) {
-      case 'GET': {
-        const { data, error } = await supabase
-          .from('community_members')
-          .select('community_id, role, communities(name, pfp)')
-          .eq('user_id', user);
-        if (error) throw error;
-        return res.json(data);
-      }
-      case 'POST': {
-        const { name, guild_id, pfp } = req.body;
-        const { data, error } = await supabase
-          .from('communities')
-          .insert({ name, guild_id, pfp, owner_id: user });
-        if (error) throw error;
-        return res.json(data);
-      }
-      default:
-        return res.status(405).json({ error: 'Method not allowed' });
+    if(req.method === 'GET') {
+      // return communities with membership flag
+      const { data } = await supa.from('communities').select('*');
+      const { data: members } = await supa.from('community_members').select('*').eq('user_id', session.id);
+      const memberSet = new Set((members||[]).map(m=>m.community_id));
+      const out = (data||[]).map(c => ({ ...c, is_member: memberSet.has(c.id) }));
+      return res.json(out);
     }
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
-  }
+
+    if(req.method === 'POST') {
+      const body = await readBody(req);
+      if(body.action === 'create') {
+        const { name, guild_id, pfp } = body;
+        const { data } = await supa.from('communities').insert({ name, guild_id, pfp }).select().single();
+        // add creator as owner/member
+        await supa.from('community_members').insert({ community_id: data.id, user_id: session.id, role: 'owner' });
+        return res.json(data);
+      }
+      if(body.action === 'join') {
+        const { community_id } = body;
+        await supa.from('community_members').insert({ community_id, user_id: session.id, role: 'member' });
+        return res.json({ ok: true });
+      }
+    }
+
+    return res.status(405).json({ error: 'method not allowed' });
+  } catch(e) { console.error(e); res.status(500).json({ error: 'server error' }); }
 }
+
+function readBody(req){ return new Promise((resolve,reject)=>{ let s=''; req.on('data',c=>s+=c); req.on('end',()=>resolve(s?JSON.parse(s):{})); req.on('error',reject); }); }

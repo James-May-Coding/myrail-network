@@ -1,93 +1,63 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-<meta charset="UTF-8">
-<title>Railway Dashboard</title>
-<link href="./style.css" rel="stylesheet">
+  <meta charset="utf-8" />
+  <title>Dashboard - Railway</title>
+  <link rel="stylesheet" href="/style.css">
+  <script>
+    // Optional quick local injection:
+    // window._env = window._env || { SUPABASE_URL: "https://your-project.supabase.co", SUPABASE_ANON_KEY: "anon-..." };
+  </script>
+  <!-- Supabase client for realtime in browser (CDN ESM) -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm"></script>
 </head>
-<body class="bg-gray-100 font-sans">
+<body class="page">
+  <header class="header">
+    <h1>Railway Dashboard</h1>
+    <div id="user-info">Loading...</div>
+    <button id="logout" class="btn">Logout</button>
+  </header>
 
-<header class="bg-blue-600 text-white p-4 flex justify-between items-center">
-  <h1 class="text-2xl font-bold">Railway Dashboard</h1>
-  <span id="user-display"></span>
-</header>
+  <main class="grid">
+    <section class="card">
+      <h2>Pending Invites</h2>
+      <div id="invites-container" class="list"></div>
+    </section>
 
-<main class="p-4 grid grid-cols-3 gap-4">
+    <section class="card">
+      <h2>Communities</h2>
+      <div id="communities-container" class="list"></div>
+      <button id="create-community" class="btn primary">Create Community</button>
+    </section>
 
-  <!-- Pending Invites -->
-  <section>
-    <h2 class="text-xl font-semibold mb-2">Pending Invites</h2>
-    <div id="invites-container" class="space-y-2"></div>
-  </section>
+    <section class="card big">
+      <h2>Train Jobs</h2>
+      <table id="trains-table" class="table">
+        <thead><tr><th>Code</th><th>Route</th><th>Engineer</th><th>Conductor</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="trains-body"></tbody>
+      </table>
+    </section>
+  </main>
 
-  <!-- Communities -->
-  <section>
-    <h2 class="text-xl font-semibold mb-2 flex justify-between items-center">
-      Communities
-      <button id="new-community-btn" class="bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">New</button>
-    </h2>
-    <div id="communities-container" class="space-y-2"></div>
-
-    <!-- New Community Modal -->
-    <div id="community-modal" class="hidden fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex justify-center items-center">
-      <div class="bg-white p-4 rounded w-96">
-        <h3 class="text-lg font-semibold mb-2">Create Community</h3>
-        <input id="community-name" placeholder="Name" class="w-full mb-2 border px-2 py-1 rounded"/>
-        <input id="community-guild" placeholder="Guild ID" class="w-full mb-2 border px-2 py-1 rounded"/>
-        <input id="community-pfp" placeholder="PFP URL" class="w-full mb-2 border px-2 py-1 rounded"/>
-        <div class="flex justify-end gap-2">
-          <button id="create-community-btn" class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">Create</button>
-          <button onclick="document.getElementById('community-modal').classList.add('hidden')" class="px-3 py-1 border rounded">Cancel</button>
-        </div>
+  <!-- Edit train modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <h3>Edit Train</h3>
+      <input id="m-id" type="hidden" />
+      <label>Code <input id="m-code" /></label>
+      <label>Route <input id="m-route" /></label>
+      <label>Engineer <input id="m-engineer" /></label>
+      <label>Conductor <input id="m-conductor" /></label>
+      <label>Status
+        <select id="m-status"><option value="open">open</option><option value="claimed">claimed</option><option value="closed">closed</option></select>
+      </label>
+      <div style="margin-top:0.5rem">
+        <button id="m-save" class="btn primary">Save</button>
+        <button id="m-cancel" class="btn">Cancel</button>
       </div>
     </div>
-  </section>
+  </div>
 
-  <!-- Trains Table -->
-  <section class="col-span-3">
-    <h2 class="text-xl font-semibold mb-2">Train Jobs</h2>
-    <table class="w-full table-auto border-collapse">
-      <thead class="bg-gray-300">
-        <tr>
-          <th class="border px-2 py-1">Code</th>
-          <th class="border px-2 py-1">Route</th>
-          <th class="border px-2 py-1">Engineer</th>
-          <th class="border px-2 py-1">Conductor</th>
-          <th class="border px-2 py-1">Status</th>
-          <th class="border px-2 py-1">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="trains-container"></tbody>
-    </table>
-
-    <!-- Admin Edit Modal -->
-    <div id="train-modal" class="hidden fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex justify-center items-center">
-      <div class="bg-white p-4 rounded w-96">
-        <input type="hidden" id="train-id">
-        <input id="train-code" class="w-full mb-2 border px-2 py-1 rounded"/>
-        <input id="train-route" class="w-full mb-2 border px-2 py-1 rounded"/>
-        <input id="train-engineer" class="w-full mb-2 border px-2 py-1 rounded" placeholder="Engineer"/>
-        <input id="train-conductor" class="w-full mb-2 border px-2 py-1 rounded" placeholder="Conductor"/>
-        <select id="train-status" class="w-full mb-2 border px-2 py-1 rounded">
-          <option value="open">Open</option>
-          <option value="claimed">Claimed</option>
-          <option value="closed">Closed</option>
-        </select>
-        <div class="flex justify-end gap-2">
-          <button id="save-train-btn" class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">Save</button>
-          <button id="close-train-modal" class="px-3 py-1 border rounded">Close</button>
-        </div>
-      </div>
-    </div>
-
-  </section>
-</main>
-<script>
-    window._env = {
-        SUPABASE_URL: "https://dmjazdpluclinainckit.supabase.co",
-        SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtamF6ZHBsdWNsaW5haW5ja2l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyOTYyNDEsImV4cCI6MjA3Nzg3MjI0MX0.BtKwm3wds62gOrabC5lY4561zawTdT_f-o9_frO2TRk"
-    };
-    </script>
-<script type="module" src="./dashboard.js"></script>
+  <script type="module" src="/dashboard.js"></script>
 </body>
 </html>

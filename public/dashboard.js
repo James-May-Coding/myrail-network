@@ -1,184 +1,184 @@
-// ===================================================
-// ✅ Dashboard.js – Final Clean Version (NO BUILD ERRORS)
-// ===================================================
+// public/dashboard.js
+// Strict: uses ONLY /api endpoints for sensitive ops
+// Fetches env via /api/env (frontend-safe keys) to enable realtime subscriptions
+const $ = id => document.getElementById(id);
 
-// ---- ✅ Load Supabase ----
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-// Make sure window._env exists before accessing it
-const SUPABASE_URL = window._env?.SUPABASE_URL;
-const SUPABASE_ANON_KEY = window._env?.SUPABASE_ANON_KEY;
-
-console.log("✅ Dashboard loaded");
-console.log("🔗 SUPABASE_URL:", SUPABASE_URL);
-console.log("🔐 ANON KEY EXISTS:", !!SUPABASE_ANON_KEY);
-
-if (!SUPABASE_URL || !SUPABASE_URL.startsWith("https://")) {
-    alert("Supabase URL is invalid. Check dashboard.html window._env section.");
-    throw new Error("❌ Invalid SUPABASE_URL: " + SUPABASE_URL);
-}
-
-if (!SUPABASE_ANON_KEY) {
-    alert("Missing Supabase key.");
-    throw new Error("❌ Missing SUPABASE_ANON_KEY.");
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// ---- ✅ UI Elements ----
-const loginStatus = document.getElementById("login-status");
-const communitiesSection = document.getElementById("communities-section");
-const jobBoardSection = document.getElementById("job-board-section");
-const createCommunityBtn = document.getElementById("create-community");
-const logoutButton = document.getElementById("logout-btn");
+// UI elements
+const userInfo = $('user-info');
+const logoutBtn = $('logout');
+const invitesContainer = $('invites-container');
+const communitiesContainer = $('communities-container');
+const trainsBody = $('trains-body');
+const createCommunityBtn = $('create-community');
+const modal = $('modal');
+const mSave = $('m-save');
+const mCancel = $('m-cancel');
 
 let currentUser = null;
-let activeCommunityId = null;
+let supabaseClient = null; // will be set for realtime only
 
-// ===================================================
-// ✅ Init - Check Auth & Load UI
-// ===================================================
-async function initDashboard() {
-    const {
-        data: { user }
-    } = await supabase.auth.getUser();
-
-    console.log("Logged-in user:", user);
-
-    if (!user) {
-        window.location.href = "/"; // redirect to login
-        return;
-    }
-
-    currentUser = user;
-    loginStatus.innerHTML = `✅ Logged in as <strong>${user.user_metadata?.full_name || user.email}</strong>`;
-
-    await loadCommunities();
+async function fetchJson(url, opts) {
+  const r = await fetch(url, opts || {});
+  if (!r.ok) {
+    const t = await r.text().catch(()=>null);
+    console.error('API error', url, r.status, t);
+    throw new Error('API error ' + url + ' ' + r.status);
+  }
+  return r.json();
 }
 
-initDashboard();
+// 1) get session (cookie-based)
+async function loadSession() {
+  try {
+    const data = await fetchJson('/api/auth/session');
+    if (!data.user) {
+      window.location.href = '/index.html';
+      return false;
+    }
+    currentUser = data.user;
+    userInfo.innerHTML = `<strong>${escapeHtml(currentUser.username)}</strong>`;
+    return true;
+  } catch (e) {
+    console.error('Session load failed', e);
+    window.location.href = '/index.html';
+    return false;
+  }
+}
 
-// ===================================================
-// ✅ Load communities the user is a part of
-// ===================================================
+// 2) get env for realtime (anon key)
+async function initRealtime() {
+  try {
+    const env = await fetchJson('/api/env');
+    // use CDN ESM createClient already loaded by script tag; create via global
+    // but import path may be ESM; to avoid bundler issues, use dynamic import:
+    const module = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
+    supabaseClient = module.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
+    // optional: subscribe to tables
+    supabaseClient
+      .channel('realtime-trains')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trains' }, ()=> loadTrains())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'communities' }, ()=> loadCommunities())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_invites' }, ()=> loadInvites())
+      .subscribe();
+  } catch (e) {
+    console.warn('Realtime init failed, continuing without realtime', e);
+    supabaseClient = null;
+  }
+}
+
+// 3) load invites (from API)
+async function loadInvites() {
+  const invites = await fetchJson('/api/invites');
+  invitesContainer.innerHTML = '';
+  invites.forEach(inv => {
+    const div = document.createElement('div');
+    div.className = 'invite-card';
+    div.innerHTML = `<div><strong>${escapeHtml(inv.community_name)}</strong></div>
+      <div><button class="btn accept" data-id="${inv.id}">Accept</button> <button class="btn" data-id="${inv.id}" data-action="deny">Deny</button></div>`;
+    invitesContainer.appendChild(div);
+  });
+  // bind
+  invitesContainer.querySelectorAll('button.accept').forEach(b=>b.onclick = async e=>{
+    const id = e.target.dataset.id;
+    await fetchJson('/api/invites', {method:'PATCH', headers:{'content-type':'application/json'}, body:JSON.stringify({id, status:'accepted'})});
+    await loadInvites(); await loadCommunities();
+  });
+  invitesContainer.querySelectorAll('button[data-action="deny"]').forEach(b=>b.onclick = async e=>{
+    const id = e.target.dataset.id;
+    await fetchJson('/api/invites', {method:'PATCH', headers:{'content-type':'application/json'}, body:JSON.stringify({id, status:'denied'})});
+    await loadInvites();
+  });
+}
+
+// 4) load communities (from API)
 async function loadCommunities() {
-    console.log("Loading communities…");
-
-    const { data, error } = await supabase
-        .from("community_members")
-        .select("community_id, communities (id, name, icon_url)")
-        .eq("user_id", currentUser.id);
-
-    if (error) {
-        console.error("Error loading communities:", error);
-        return;
-    }
-
-    communitiesSection.innerHTML = "";
-
-    if (!data.length) {
-        communitiesSection.innerHTML = "<p>No communities yet.</p>";
-        jobBoardSection.style.display = "none";
-        return;
-    }
-
-    data.forEach((item) => {
-        const c = item.communities;
-        const div = document.createElement("div");
-        div.className = "community clickable";
-        div.innerHTML = `
-            <img src="${c.icon_url || "/default-icon.png"}" class="comm-icon"/>
-            <span>${c.name}</span>
-        `;
-
-        div.onclick = () => {
-            activeCommunityId = c.id;
-            jobBoardSection.style.display = "block";
-            loadJobs();
-        };
-
-        communitiesSection.appendChild(div);
-    });
-}
-
-// ===================================================
-// ✅ Load jobs for active community
-// ===================================================
-async function loadJobs() {
-    console.log("Loading jobs for community:", activeCommunityId);
-
-    const jobTable = document.getElementById("job-board-table");
-    jobTable.innerHTML = `<tr><th>Train</th><th>Engineer</th><th>Conductor</th></tr>`;
-
-    const { data, error } = await supabase
-        .from("jobs")
-        .select("*")
-        .eq("community_id", activeCommunityId);
-
-    if (error) {
-        console.error("Error loading jobs:", error);
-        return;
-    }
-
-    data.forEach(job => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-            <td>${job.train_name}</td>
-            <td>${job.engineer_name || "-"}</td>
-            <td>${job.conductor_name || "-"}</td>
-        `;
-        jobTable.appendChild(row);
-    });
-}
-
-// ===================================================
-// ✅ Create Community
-// ===================================================
-createCommunityBtn.addEventListener("click", async () => {
-    const name = prompt("Community Name:");
-    if (!name) return;
-
-    const guild_id = prompt("Discord Guild ID:");
-    if (!guild_id) return;
-
-    const icon_url = prompt("Icon URL (optional):") || null;
-
-    const { data, error } = await supabase
-        .from("communities")
-        .insert([{ name, guild_id, icon_url }])
-        .select();
-
-    if (error) {
-        alert("Error: " + error.message);
-        return;
-    }
-
-    const newComm = data[0];
-
-    await supabase.from("community_members").insert([
-        { user_id: currentUser.id, community_id: newComm.id, role: "owner" }
-    ]);
-
+  const communities = await fetchJson('/api/communities');
+  communitiesContainer.innerHTML = '';
+  communities.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'community-card';
+    div.innerHTML = `<div><strong>${escapeHtml(c.name)}</strong><div>Guild: ${escapeHtml(c.guild_id)}</div></div>
+      <div>${c.is_member ? '<span>Member</span>' : `<button class="btn join" data-id="${c.id}">Join</button>`}</div>`;
+    communitiesContainer.appendChild(div);
+  });
+  // bind join
+  communitiesContainer.querySelectorAll('button.join').forEach(b => b.onclick = async e=>{
+    await fetchJson('/api/communities', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({action:'join', community_id:e.target.dataset.id})});
     await loadCommunities();
-});
+  });
+}
 
-// ===================================================
-// ✅ Real-Time Updates: Auto-refresh job board
-// ===================================================
-supabase
-    .channel("jobs-changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: "jobs" },
-        () => {
-            console.log("🔄 Job update detected — refreshing");
-            if (activeCommunityId) loadJobs();
-        }
-    )
-    .subscribe();
+// 5) load trains
+async function loadTrains() {
+  const trains = await fetchJson('/api/trains');
+  trainsBody.innerHTML = '';
+  trains.forEach(t => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(t.code)}</td><td>${escapeHtml(t.route)}</td><td>${escapeHtml(t.engineer||'-')}</td><td>${escapeHtml(t.conductor||'-')}</td><td>${escapeHtml(t.status)}</td>
+      <td>
+        ${t.status==='open' ? `<button class="btn claim" data-id="${t.id}">Claim</button>` : ''}
+        ${t.can_edit ? `<button class="btn edit" data-id="${t.id}">Edit</button>` : ''}
+      </td>`;
+    trainsBody.appendChild(tr);
+  });
+  // bind claim/edit
+  trainsBody.querySelectorAll('button.claim').forEach(b => b.onclick = async e=>{
+    const id = e.target.dataset.id;
+    await fetchJson('/api/trains', {method:'PATCH', headers:{'content-type':'application/json'}, body:JSON.stringify({id, action:'claim'})});
+    await loadTrains();
+  });
+  trainsBody.querySelectorAll('button.edit').forEach(b => b.onclick = async e=>{
+    const id = e.target.dataset.id;
+    const t = (await fetchJson('/api/trains?id=' + encodeURIComponent(id)))[0];
+    $('m-id').value = t.id;
+    $('m-code').value = t.code;
+    $('m-route').value = t.route;
+    $('m-engineer').value = t.engineer || '';
+    $('m-conductor').value = t.conductor || '';
+    $('m-status').value = t.status;
+    modal.classList.remove('hidden');
+  });
+}
 
-// ===================================================
-// ✅ Logout
-// ===================================================
-logoutButton.addEventListener("click", async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/";
-});
+// modal handlers
+mCancel.onclick = ()=> modal.classList.add('hidden');
+mSave.onclick = async ()=>{
+  const id = $('m-id').value;
+  const updates = { code:$('m-code').value, route:$('m-route').value, engineer:$('m-engineer').value, conductor:$('m-conductor').value, status:$('m-status').value };
+  await fetchJson('/api/trains', {method:'PATCH', headers:{'content-type':'application/json'}, body:JSON.stringify({id, action:'edit', updates})});
+  modal.classList.add('hidden');
+  await loadTrains();
+};
+
+// create community flow
+createCommunityBtn.onclick = async ()=>{
+  const name = prompt('Community name:');
+  if (!name) return;
+  const guild_id = prompt('Guild ID:');
+  if (!guild_id) return;
+  const pfp = prompt('Image URL (optional):') || '';
+  await fetchJson('/api/communities', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({action:'create', name, guild_id, pfp})});
+  await loadCommunities();
+};
+
+logoutBtn.onclick = async ()=>{
+  await fetch('/api/auth/session', {method:'DELETE'});
+  window.location.href = '/index.html';
+};
+
+// escape helper
+function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// bootstrap
+(async function init(){
+  const ok = await loadSession();
+  if(!ok) return;
+  await initRealtime();
+  await loadInvites();
+  await loadCommunities();
+  await loadTrains();
+  // periodic fallback polling every 12s if realtime not available
+  setInterval(async ()=>{
+    try { await loadTrains(); await loadCommunities(); await loadInvites(); } catch(e){}
+  }, 12000);
+})();
