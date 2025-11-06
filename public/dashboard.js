@@ -1,193 +1,142 @@
-import { supabase } from './supabase.js';
+// ✅ Load Supabase client from CDN (works in plain/public deployments)
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-// DOM Elements
-const userDisplay = document.getElementById('user-display');
-const trainsContainer = document.getElementById('trains-container');
-const invitesContainer = document.getElementById('invites-container');
-const communitiesContainer = document.getElementById('communities-container');
-const communityModal = document.getElementById('community-modal');
-const createCommunityBtn = document.getElementById('create-community-btn');
+// ✅ Load project environment variables passed via injected script tag
+const SUPABASE_URL = window._env?.SUPABASE_URL;
+const SUPABASE_ANON_KEY = window._env?.SUPABASE_ANON_KEY;
 
-// Current logged-in user
-let currentUser = null;
-
-// ------------------------
-// 1️⃣ Get current user
-// ------------------------
-async function getCurrentUser() {
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    console.error('No user logged in', error);
-    return;
-  }
-  currentUser = data.user;
-  userDisplay.textContent = currentUser.email || 'Unknown User';
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+	console.error("❌ Missing Supabase environment variables!");
+	alert("Supabase config missing — contact admin.");
 }
 
-// ------------------------
-// 2️⃣ Load Trains
-// ------------------------
-async function loadTrains() {
-  const { data: trains, error } = await supabase
-    .from('trains')
-    .select('*')
-    .order('id', { ascending: true });
+// ✅ init supabase
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  if (error) return console.error(error);
 
-  trainsContainer.innerHTML = '';
-  trains.forEach(t => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${t.code}</td>
-      <td>${t.route}</td>
-      <td>${t.engineer || '-'}</td>
-      <td>${t.conductor || '-'}</td>
-      <td>${t.status}</td>
-      <td>
-        ${t.status === 'open' ? `<button class="btn-claim" data-id="${t.id}">Claim</button>` : ''}
-        ${currentUser?.role === 'admin' ? `<button class="edit-btn" data-id="${t.id}">Edit</button>` : ''}
-      </td>
-    `;
-    trainsContainer.appendChild(tr);
-  });
+// 🎯 PAGE ELEMENTS
+const communitiesList = document.getElementById("communitiesList");
+const invitesList = document.getElementById("invitesList");
+const createCommunityBtn = document.getElementById("createCommunityBtn");
+const logoutBtn = document.getElementById("logoutBtn");
 
-  // Add claim buttons event
-  document.querySelectorAll('.btn-claim').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const trainId = e.target.dataset.id;
-      await claimTrain(trainId);
-    });
-  });
-
-  // Add edit buttons event (admins)
-  document.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const trainId = e.target.dataset.id;
-      editTrain(trainId);
-    });
-  });
+// ✅ Get Current Auth User (session)
+async function getUser() {
+	const { data } = await supabase.auth.getUser();
+	return data.user;
 }
 
-// ------------------------
-// 3️⃣ Claim Train
-// ------------------------
-async function claimTrain(trainId) {
-  const field = currentUser.role === 'staff' ? 'engineer' : 'conductor';
-  const updates = {};
-  updates[field] = currentUser.email;
 
-  const { error } = await supabase
-    .from('trains')
-    .update(updates)
-    .eq('id', trainId);
-
-  if (error) return console.error('Failed to claim train:', error);
-}
-
-// ------------------------
-// 4️⃣ Edit Train (Admin Only)
-// ------------------------
-function editTrain(trainId) {
-  const newEngineer = prompt('Enter Engineer username:');
-  const newConductor = prompt('Enter Conductor username:');
-
-  supabase
-    .from('trains')
-    .update({ engineer: newEngineer, conductor: newConductor })
-    .eq('id', trainId)
-    .then(({ error }) => {
-      if (error) console.error(error);
-    });
-}
-
-// ------------------------
-// 5️⃣ Load Communities & Invites
-// ------------------------
+// ✅ Fetch Communities Assigned To User
 async function loadCommunities() {
-  const { data: communities, error } = await supabase
-    .from('communities')
-    .select('*');
+	const user = await getUser();
+	if (!user) return;
 
-  if (error) return console.error(error);
+	const { data, error } = await supabase
+		.from("communities")
+		.select("*")
+		.eq("owner_id", user.id);
 
-  communitiesContainer.innerHTML = '';
-  communities.forEach(c => {
-    const div = document.createElement('div');
-    div.className = 'community-card';
-    div.innerHTML = `
-      <img src="${c.pfp}" alt="PF">
-      <span>${c.name}</span>
-      ${c.members?.includes(currentUser?.id) ? '<span>Joined</span>' : `<button class="join-community-btn" data-id="${c.id}">Join</button>`}
-    `;
-    communitiesContainer.appendChild(div);
-  });
+	if (error) console.error(error);
 
-  document.querySelectorAll('.join-community-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const communityId = e.target.dataset.id;
-      await joinCommunity(communityId);
-    });
-  });
+	communitiesList.innerHTML = "";
+
+	data.forEach(comm => {
+		let div = document.createElement("div");
+		div.className = "community-card";
+		div.innerHTML = `
+			<img src="${comm.icon_url || '/placeholder.png'}" class="icon"/>
+			<h3>${comm.name}</h3>
+			<p>Guild ID: ${comm.guild_id}</p>
+		`;
+		communitiesList.appendChild(div);
+	});
 }
 
-// ------------------------
-// 6️⃣ Join Community
-// ------------------------
-async function joinCommunity(communityId) {
-  const { data: community, error } = await supabase
-    .from('communities')
-    .select('members')
-    .eq('id', communityId)
-    .single();
 
-  if (error) return console.error(error);
+// ✅ Fetch Community Invites
+async function loadInvites() {
+	const user = await getUser();
+	if (!user) return;
 
-  const members = community.members || [];
-  if (!members.includes(currentUser.id)) members.push(currentUser.id);
+	const { data, error } = await supabase
+		.from("community_invites")
+		.select("*, communities(name, icon_url)")
+		.eq("invitee_id", user.id);
 
-  await supabase.from('communities').update({ members }).eq('id', communityId);
+	if (error) return console.error(error);
+
+	invitesList.innerHTML = "";
+
+	data.forEach(invite => {
+		let div = document.createElement("div");
+		div.className = "invite-card";
+		div.innerHTML = `
+			<img src="${invite.communities.icon_url || '/placeholder.png'}" class="icon"/>
+			<p>${invite.communities.name}</p>
+			<button class="accept" data-id="${invite.id}">Accept</button>
+			<button class="deny" data-id="${invite.id}">Deny</button>
+		`;
+		invitesList.appendChild(div);
+	});
 }
 
-// ------------------------
-// 7️⃣ Real-Time Updates
-// ------------------------
-supabase
-  .from('trains')
-  .on('*', payload => loadTrains())
-  .subscribe();
 
+// ✅ Add Real-Time Listener — auto update dashboard
 supabase
-  .from('communities')
-  .on('*', payload => loadCommunities())
-  .subscribe();
+	.channel("realtime-communities")
+	.on("postgres_changes", { event: "*", schema: "public" }, payload => {
+		loadCommunities();
+		loadInvites();
+	})
+	.subscribe();
 
-// ------------------------
-// 8️⃣ Create Community Modal
-// ------------------------
-createCommunityBtn.addEventListener('click', () => {
-  communityModal.classList.add('show');
+
+// ✅ Accept / Deny Invite
+invitesList.addEventListener("click", async e => {
+	if (!e.target.dataset.id) return;
+	const id = e.target.dataset.id;
+
+	if (e.target.classList.contains("accept")) {
+		await supabase.from("community_members").insert({
+			invite_id: id
+		});
+	}
+
+	await supabase.from("community_invites").delete().eq("id", id);
+	loadInvites();
+	loadCommunities();
 });
 
-communityModal.querySelector('form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = e.target.name.value;
-  const guildId = e.target.guildId.value;
-  const pfp = e.target.pfp.value;
 
-  await supabase.from('communities').insert([{ name, guild_id: guildId, pfp, members: [currentUser.id] }]);
+// ✅ Create Community
+createCommunityBtn.addEventListener("click", async () => {
+	const name = prompt("Enter community name:");
+	const guildID = prompt("Enter Guild ID:");
+	const icon = prompt("Image URL? (optional)");
 
-  communityModal.classList.remove('show');
-  e.target.reset();
+	if (!name || !guildID) return alert("Missing data!");
+
+	const user = await getUser();
+
+	await supabase.from("communities").insert({
+		name,
+		guild_id: guildID,
+		icon_url: icon,
+		owner_id: user.id
+	});
+
+	loadCommunities();
 });
 
-// ------------------------
-// 9️⃣ Initialize
-// ------------------------
-async function init() {
-  await getCurrentUser();
-  await loadTrains();
-  await loadCommunities();
-}
 
-init();
+// ✅ Logout
+logoutBtn.addEventListener("click", async () => {
+	await supabase.auth.signOut();
+	window.location = "/"; // Back to home
+});
+
+
+// ✅ Initial Load
+loadCommunities();
+loadInvites();
