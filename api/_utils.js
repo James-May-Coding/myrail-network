@@ -2,7 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 export function getSupabaseService() {
-  const url = process.env.SUPABASE_URL;
+  const url = "https://dmjazdpluclinainckit.supabase.co";
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if(!url || !key) throw new Error("Missing server SUPABASE env.");
   return createClient(url, key, { auth: { persistSession: false }});
