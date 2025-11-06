@@ -1,39 +1,39 @@
-// api/communities.js
-import { getSupabaseService, parseSessionCookie } from './_utils.js';
+import cookie from 'cookie';
+import { createClient } from '@supabase/supabase-js';
 
-export default async function handler(req,res) {
-  const supa = getSupabaseService();
-  const session = parseSessionCookie(req);
-  if(!session) return res.status(401).json({ error: 'Unauthorized' });
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+export default async function handler(req, res) {
   try {
-    if(req.method === 'GET') {
-      // return communities with membership flag
-      const { data } = await supa.from('communities').select('*');
-      const { data: members } = await supa.from('community_members').select('*').eq('user_id', session.id);
-      const memberSet = new Set((members||[]).map(m=>m.community_id));
-      const out = (data||[]).map(c => ({ ...c, is_member: memberSet.has(c.id) }));
-      return res.json(out);
-    }
+    const cookies = cookie.parse(req.headers.cookie || '');
+    const sessionUser = cookies.user ? JSON.parse(cookies.user) : null;
+    if (!sessionUser) return res.status(401).json({ error: 'Not authenticated' });
 
-    if(req.method === 'POST') {
-      const body = await readBody(req);
-      if(body.action === 'create') {
-        const { name, guild_id, pfp } = body;
-        const { data } = await supa.from('communities').insert({ name, guild_id, pfp }).select().single();
-        // add creator as owner/member
-        await supa.from('community_members').insert({ community_id: data.id, user_id: session.id, role: 'owner' });
-        return res.json(data);
-      }
-      if(body.action === 'join') {
-        const { community_id } = body;
-        await supa.from('community_members').insert({ community_id, user_id: session.id, role: 'member' });
-        return res.json({ ok: true });
-      }
-    }
+    if (req.method === 'GET') {
+      const { data } = await supabase
+        .from('groups')
+        .select('*, group_members!inner(role, user_id)')
+        .in('group_members.user_id', [sessionUser.id]);
+      res.status(200).json(data);
+    } else if (req.method === 'POST') {
+      const { name, description, discord_guild_id } = req.body;
+      if (!name) return res.status(400).json({ error: 'Missing name' });
 
-    return res.status(405).json({ error: 'method not allowed' });
-  } catch(e) { console.error(e); res.status(500).json({ error: 'server error' }); }
+      const { data: group } = await supabase
+        .from('groups')
+        .insert({ name, description, discord_guild_id })
+        .select()
+        .single();
+
+      await supabase.from('group_members').insert({ group_id: group.id, user_id: sessionUser.id, role: 'owner' });
+
+      res.status(200).json(group);
+    } else {
+      res.setHeader('Allow', ['GET','POST']);
+      res.status(405).end(`Method ${req.method} Not Allowed`);
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'server error', details: err.message });
+  }
 }
-
-function readBody(req){ return new Promise((resolve,reject)=>{ let s=''; req.on('data',c=>s+=c); req.on('end',()=>resolve(s?JSON.parse(s):{})); req.on('error',reject); }); }

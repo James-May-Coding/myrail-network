@@ -1,35 +1,40 @@
-// api/invites.js
-import { getSupabaseService, parseSessionCookie } from './_utils.js';
-export default async function handler(req,res) {
-  const supa = getSupabaseService();
-  const session = parseSessionCookie(req);
-  if(!session) return res.status(401).json({ error: 'Unauthorized' });
+import cookie from 'cookie';
+import { createClient } from '@supabase/supabase-js';
 
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+export default async function handler(req, res) {
   try {
-    if(req.method === 'GET') {
-      const { data } = await supa.from('community_invites').select('id,community_id,status,communities(name)').eq('invitee_id', session.id).eq('status','pending');
-      const out = (data||[]).map(i => ({ id:i.id, community_name: i.communities?.name || 'Unknown' }));
-      return res.json(out);
-    }
-    if(req.method === 'PATCH') {
-      const body = await readBody(req);
-      const { id, status } = body;
-      await supa.from('community_invites').update({ status }).eq('id', id);
-      if(status === 'accepted') {
-        const inv = (await supa.from('community_invites').select('*').eq('id', id).single()).data;
-        await supa.from('community_members').insert({ community_id: inv.community_id, user_id: session.id, role: 'member' });
-      }
-      return res.json({ ok: true });
-    }
-    if(req.method === 'POST') {
-      // create invite (admin only)  body: {community_id, invitee_id}
-      const body = await readBody(req);
-      // optional: check if session user is admin/owner of the community
-      await supa.from('community_invites').insert({ community_id: body.community_id, invitee_id: body.invitee_id, status: 'pending' });
-      return res.json({ ok: true });
-    }
-    res.status(405).json({ error: 'method not allowed' });
-  } catch(e){ console.error(e); res.status(500).json({ error: 'server error' }); }
-}
+    const cookies = cookie.parse(req.headers.cookie || '');
+    const sessionUser = cookies.user ? JSON.parse(cookies.user) : null;
+    if (!sessionUser) return res.status(401).json({ error: 'Not authenticated' });
 
-function readBody(req){ return new Promise((resolve,reject)=>{ let s=''; req.on('data',c=>s+=c); req.on('end',()=>resolve(s?JSON.parse(s):{})); req.on('error',reject); }); }
+    if (req.method === 'GET') {
+      // fetch invites for this user where not yet accepted
+      const { data } = await supabase
+        .from('group_members')
+        .select('group_id, role, groups(name)')
+        .eq('user_id', sessionUser.id)
+        .is('role', 'invite'); // temporary role = 'invite'
+      res.status(200).json(data || []);
+    } else if (req.method === 'PATCH') {
+      const { group_id, accept } = req.body;
+      if (!group_id) return res.status(400).json({ error: 'Missing group_id' });
+
+      const newRole = accept ? 'member' : 'denied';
+      await supabase
+        .from('group_members')
+        .update({ role: newRole })
+        .eq('group_id', group_id)
+        .eq('user_id', sessionUser.id);
+
+      res.status(200).json({ success: true });
+    } else {
+      res.setHeader('Allow', ['GET','PATCH']);
+      res.status(405).end(`Method ${req.method} Not Allowed`);
+    }
+  } catch(err) {
+    console.error(err);
+    res.status(500).json({ error: 'server error', details: err.message });
+  }
+}

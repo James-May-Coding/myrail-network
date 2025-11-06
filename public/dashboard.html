@@ -1,63 +1,58 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Dashboard - Railway</title>
-  <link rel="stylesheet" href="/style.css">
-  <script>
-    // Optional quick local injection:
-    // window._env = window._env || { SUPABASE_URL: "https://your-project.supabase.co", SUPABASE_ANON_KEY: "anon-..." };
-  </script>
-  <!-- Supabase client for realtime in browser (CDN ESM) -->
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm"></script>
+  <meta charset="UTF-8">
+  <title>Dashboard - MyRail</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-<body class="page">
-  <header class="header">
-    <h1>Railway Dashboard</h1>
-    <div id="user-info">Loading...</div>
-    <button id="logout" class="btn">Logout</button>
+<body class="bg-gray-100">
+  <header class="flex justify-between items-center bg-white p-4 shadow">
+    <h1 class="text-xl font-bold">MyRail Dashboard</h1>
+    <button id="logout" class="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700">Logout</button>
   </header>
 
-  <main class="grid">
-    <section class="card">
-      <h2>Pending Invites</h2>
-      <div id="invites-container" class="list"></div>
+  <main class="p-4">
+    <section class="mb-6">
+      <h2 class="font-bold text-lg mb-2">Invites</h2>
+      <div id="invites-container"></div>
     </section>
 
-    <section class="card">
-      <h2>Communities</h2>
-      <div id="communities-container" class="list"></div>
-      <button id="create-community" class="btn primary">Create Community</button>
+    <section class="mb-6">
+      <h2 class="font-bold text-lg mb-2">Communities</h2>
+      <div id="communities-container" class="space-y-2"></div>
+      <button id="create-community" class="mt-2 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700">
+        Create Community
+      </button>
     </section>
 
-    <section class="card big">
-      <h2>Train Jobs</h2>
-      <table id="trains-table" class="table">
-        <thead><tr><th>Code</th><th>Route</th><th>Engineer</th><th>Conductor</th><th>Status</th><th>Actions</th></tr></thead>
+    <section>
+      <h2 class="font-bold text-lg mb-2">Trains / Jobs</h2>
+      <table class="w-full bg-white rounded shadow">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="p-2 text-left">Code</th>
+            <th class="p-2 text-left">Description</th>
+            <th class="p-2 text-left">Direction</th>
+            <th class="p-2 text-left">Yard</th>
+            <th class="p-2 text-left">Crew</th>
+            <th class="p-2 text-left">Action</th>
+          </tr>
+        </thead>
         <tbody id="trains-body"></tbody>
       </table>
     </section>
   </main>
 
-  <!-- Edit train modal -->
-  <div id="modal" class="modal hidden">
-    <div class="modal-box">
-      <h3>Edit Train</h3>
-      <input id="m-id" type="hidden" />
-      <label>Code <input id="m-code" /></label>
-      <label>Route <input id="m-route" /></label>
-      <label>Engineer <input id="m-engineer" /></label>
-      <label>Conductor <input id="m-conductor" /></label>
-      <label>Status
-        <select id="m-status"><option value="open">open</option><option value="claimed">claimed</option><option value="closed">closed</option></select>
-      </label>
-      <div style="margin-top:0.5rem">
-        <button id="m-save" class="btn primary">Save</button>
-        <button id="m-cancel" class="btn">Cancel</button>
-      </div>
+  <!-- Pop-up for train crew -->
+  <div id="train-popup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-4 rounded w-96 max-h-96 overflow-y-auto">
+      <h3 class="text-lg font-bold mb-2">Train Crew</h3>
+      <div id="train-crew-list"></div>
+      <button id="close-popup" class="mt-2 px-3 py-1 bg-red-600 text-white rounded">Close</button>
     </div>
   </div>
 
-  <script type="module" src="/dashboard.js"></script>
+  <script type="module" src="supabaseClient.js"></script>
+  <script type="module" src="dashboard.js"></script>
 </body>
 </html>
