@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Railway Portal Login</title>
-  <link rel="stylesheet" href="./style.css">
+  <title>Login - MyRail</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-<body class="login-page">
-  <div class="login-container">
-    <h1 class="title">FEC Railways Staff Portal</h1>
-    <p class="subtitle">Sign in with Discord to continue</p>
-    <button id="login" class="btn">Login with Discord</button>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+  <div class="bg-white p-8 rounded shadow-md text-center">
+    <h1 class="text-2xl font-bold mb-4">Login to MyRail</h1>
+    <a href="/api/auth/discord" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+      Login with Discord
+    </a>
   </div>
-  <script type="module" src="./auth.js"></script>
 </body>
 </html>
