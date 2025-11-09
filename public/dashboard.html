@@ -1,58 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Dashboard - MyRail</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <title>FEC Railways Dashboard</title>
+  <link rel="stylesheet" href="./style.css" />
 </head>
-<body class="bg-gray-100">
-  <header class="flex justify-between items-center bg-white p-4 shadow">
-    <h1 class="text-xl font-bold">MyRail Dashboard</h1>
-    <button id="logout" class="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700">Logout</button>
+<body class="dashboard-page">
+  <header class="topbar">
+    <div class="logo">🚂 FEC Railways</div>
+    <div class="user-area">
+      <span id="user-info">Loading...</span>
+      <button id="logout" class="btn small">Logout</button>
+    </div>
   </header>
 
-  <main class="p-4">
-    <section class="mb-6">
-      <h2 class="font-bold text-lg mb-2">Invites</h2>
-      <div id="invites-container"></div>
-    </section>
+  <main class="content">
+    <section class="card" style="display:flex;gap:24px;align-items:flex-start;">
+      <div style="flex:1">
+        <h3>Invites</h3>
+        <div id="invites-container"></div>
 
-    <section class="mb-6">
-      <h2 class="font-bold text-lg mb-2">Communities</h2>
-      <div id="communities-container" class="space-y-2"></div>
-      <button id="create-community" class="mt-2 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700">
-        Create Community
-      </button>
-    </section>
+        <h3 style="margin-top:18px">Communities</h3>
+        <div id="communities-container"></div>
+        <button id="create-community" class="btn" style="margin-top:10px">Create Community</button>
+      </div>
 
-    <section>
-      <h2 class="font-bold text-lg mb-2">Trains / Jobs</h2>
-      <table class="w-full bg-white rounded shadow">
-        <thead class="bg-gray-200">
-          <tr>
-            <th class="p-2 text-left">Code</th>
-            <th class="p-2 text-left">Description</th>
-            <th class="p-2 text-left">Direction</th>
-            <th class="p-2 text-left">Yard</th>
-            <th class="p-2 text-left">Crew</th>
-            <th class="p-2 text-left">Action</th>
-          </tr>
-        </thead>
-        <tbody id="trains-body"></tbody>
-      </table>
+      <div style="flex:2">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h2>Active Trains</h2>
+          <div>
+            <button id="refresh-btn" class="btn small">Refresh</button>
+            <button id="open-admin" class="btn small" title="Open admin panel">Admin Panel</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Description</th>
+                <th>Direction</th>
+                <th>Yard</th>
+                <th>Crew</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="trains-body"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </main>
 
-  <!-- Pop-up for train crew -->
-  <div id="train-popup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-    <div class="bg-white p-4 rounded w-96 max-h-96 overflow-y-auto">
-      <h3 class="text-lg font-bold mb-2">Train Crew</h3>
-      <div id="train-crew-list"></div>
-      <button id="close-popup" class="mt-2 px-3 py-1 bg-red-600 text-white rounded">Close</button>
+  <!-- Admin modal -->
+  <div id="admin-modal" class="popup-frame" style="display:none;">
+    <div class="popup-frame-header">
+      <span id="admin-title">Admin — Manage Trains</span>
+      <button id="admin-close" class="popup-frame-close">✕</button>
+    </div>
+    <div class="popup-frame-body" style="display:flex;gap:16px;">
+      <div style="flex:1">
+        <h4>Create / Edit Train</h4>
+        <label>Group</label>
+        <select id="admin-group"></select>
+        <label>Code</label>
+        <input id="admin-code" />
+        <label>Description</label>
+        <input id="admin-desc" />
+        <label>Direction</label>
+        <input id="admin-direction" />
+        <label>Yard</label>
+        <input id="admin-yard" />
+        <div style="margin-top:8px;">
+          <button id="admin-save" class="btn">Save</button>
+          <button id="admin-delete" class="btn btn-danger">Delete</button>
+        </div>
+      </div>
+
+      <div style="flex:1">
+        <h4>Train Assignments</h4>
+        <div id="admin-assignments" style="max-height:380px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:8px;"></div>
+        <label style="margin-top:8px">Add user by email</label>
+        <input id="assign-email" placeholder="user@example.com" />
+        <label>Role (E, C, etc)</label>
+        <input id="assign-role" placeholder="E" />
+        <div style="margin-top:8px;">
+          <button id="assign-add" class="btn">Add</button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <script type="module" src="supabaseClient.js"></script>
-  <script type="module" src="dashboard.js"></script>
+  <!-- crew popup -->
+  <div id="train-popup" class="popup-frame" style="display:none;">
+    <div class="popup-frame-header"><span>Train Crew</span><button id="close-popup" class="popup-frame-close">✕</button></div>
+    <div class="popup-frame-body" id="train-crew-list"></div>
+  </div>
+
+  <script type="module" src="./dashboard.js"></script>
 </body>
 </html>
