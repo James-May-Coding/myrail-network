@@ -1,11 +1,13 @@
-export default async function handler(req, res) {
-  const cookie = req.headers.cookie?.split('; ').find(c => c.startsWith('session='));
-  if (!cookie) return res.status(200).json({ user: null });
-
+export default function handler(req, res) {
   try {
-    const session = JSON.parse(decodeURIComponent(cookie.split('=')[1]));
-    res.status(200).json({ user: session });
+    const cookies = req.headers.cookie || '';
+    const sessionCookie = cookies.split(';').find(c => c.trim().startsWith('session='));
+    if (!sessionCookie) return res.json({ user: null });
+
+    const sessionData = decodeURIComponent(sessionCookie.split('=')[1]);
+    const user = JSON.parse(sessionData);
+    res.json({ user });
   } catch (err) {
-    res.status(200).json({ user: null });
+    res.json({ user: null });
   }
 }
