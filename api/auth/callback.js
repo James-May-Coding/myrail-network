@@ -1,47 +1,67 @@
+import cookie from 'cookie';
 import { supabase } from '../utils/supabaseClient.js';
 
 export default async function handler(req, res) {
-  const code = req.query.code;
-  if (!code) return res.status(400).json({ error: 'No code provided' });
+  const { code } = req.query;
 
-  const params = new URLSearchParams({
-    client_id: process.env.DISCORD_CLIENT_ID,
-    client_secret: process.env.DISCORD_CLIENT_SECRET,
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: process.env.DISCORD_REDIRECT_URI,
-    scope: 'identify email'
-  });
+  try {
+    // Exchange code for Discord token
+    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID,
+        client_secret: process.env.DISCORD_CLIENT_SECRET,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: process.env.DISCORD_REDIRECT_URI,
+        scope: 'identify email'
+      })
+    });
 
-  const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString()
-  });
+    const tokenData = await tokenResponse.json();
+    if (!tokenData.access_token) throw new Error('No access token');
 
-  if (!tokenRes.ok) return res.status(500).json({ error: 'Failed to fetch token' });
+    // Fetch Discord user
+    const userRes = await fetch('https://discord.com/api/users/@me', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` }
+    });
+    const discordUser = await userRes.json();
 
-  const tokenData = await tokenRes.json();
+    // Upsert user into Supabase
+    const { data, error } = await supabase
+      .from('users')
+      .upsert({
+        discord_id: discordUser.id,
+        username: discordUser.username,
+        discriminator: discordUser.discriminator,
+        avatar: discordUser.avatar,
+        email: discordUser.email
+      })
+      .select()
+      .single();
 
-  const userRes = await fetch('https://discord.com/api/users/@me', {
-    headers: { Authorization: `Bearer ${tokenData.access_token}` }
-  });
+    if (error) throw error;
 
-  if (!userRes.ok) return res.status(500).json({ error: 'Failed to fetch user' });
+    // Set cookie with minimal user info or JWT
+    res.setHeader('Set-Cookie', cookie.serialize('session', JSON.stringify({
+      id: data.id,
+      discord_id: data.discord_id,
+      username: data.username
+    }), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24, // 1 day
+      path: '/'
+    }));
 
-  const user = await userRes.json();
-  if (!user.id) return res.status(500).json({ error: 'OAuth callback failed', details: user });
+    // Redirect to dashboard
+    res.writeHead(302, { Location: '/dashboard.html' });
+    res.end();
 
-  // Save or update in Supabase
-  await supabase.from('users').upsert({
-    discord_id: user.id,
-    username: user.username,
-    discriminator: user.discriminator,
-    avatar: user.avatar,
-    email: user.email
-  }).eq('discord_id', user.id);
-
-  // Set session cookie
-  res.setHeader('Set-Cookie', `user=${JSON.stringify(user)}; HttpOnly; Path=/; Max-Age=86400`);
-  res.redirect('/dashboard.html');
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'OAuth callback failed', details: err.message });
+  }
 }
