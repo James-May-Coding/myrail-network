@@ -16,7 +16,7 @@ function getCookie(name) {
 document.getElementById('login').addEventListener('click', async () => {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'discord',
-    options: { redirectTo: `${window.location.origin}/dashboard.html` }
+    options: { redirectTo: `https://myrail-network.vercel.app/dashboard.html` }
   });
   if (error) alert(error.message);
 });
