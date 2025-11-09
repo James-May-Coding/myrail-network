@@ -1,24 +1,11 @@
-import cookie from 'cookie';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-
 export default async function handler(req, res) {
+  const cookie = req.headers.cookie?.split('; ').find(c => c.startsWith('session='));
+  if (!cookie) return res.status(200).json({ user: null });
+
   try {
-    const cookies = cookie.parse(req.headers.cookie || '');
-    if (!cookies.user) return res.status(200).json({ user: null });
-
-    const sessionUser = JSON.parse(cookies.user);
-
-    const { data: user } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', sessionUser.id)
-      .single();
-
-    res.status(200).json({ user });
+    const session = JSON.parse(decodeURIComponent(cookie.split('=')[1]));
+    res.status(200).json({ user: session });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to get session' });
+    res.status(200).json({ user: null });
   }
 }
