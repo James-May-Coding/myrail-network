@@ -5,7 +5,6 @@ export default async function handler(req, res) {
   const { code } = req.query;
 
   try {
-    // Exchange code for Discord token
     const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -22,13 +21,12 @@ export default async function handler(req, res) {
     const tokenData = await tokenResponse.json();
     if (!tokenData.access_token) throw new Error('No access token');
 
-    // Fetch Discord user
     const userRes = await fetch('https://discord.com/api/users/@me', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` }
     });
     const discordUser = await userRes.json();
 
-    // Upsert user into Supabase
+    // Upsert with conflict resolution
     const { data, error } = await supabase
       .from('users')
       .upsert({
@@ -37,13 +35,13 @@ export default async function handler(req, res) {
         discriminator: discordUser.discriminator,
         avatar: discordUser.avatar,
         email: discordUser.email
-      })
+      }, { onConflict: 'discord_id' })
       .select()
       .single();
 
     if (error) throw error;
 
-    // Set cookie with minimal user info or JWT
+    // Set HTTP-only cookie
     res.setHeader('Set-Cookie', cookie.serialize('session', JSON.stringify({
       id: data.id,
       discord_id: data.discord_id,
@@ -52,7 +50,7 @@ export default async function handler(req, res) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24, // 1 day
+      maxAge: 60 * 60 * 24,
       path: '/'
     }));
 
@@ -61,7 +59,4 @@ export default async function handler(req, res) {
     res.end();
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'OAuth callback failed', details: err.message });
-  }
-}
+    console.error(
