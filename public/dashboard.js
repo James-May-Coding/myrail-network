@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient.js';
 
+// DOM Elements
 const communitiesContainer = document.getElementById('communities-container');
 const invitesContainer = document.getElementById('invites-container');
 const trainsBody = document.getElementById('trains-body');
@@ -8,22 +9,50 @@ const createCommunityBtn = document.getElementById('create-community');
 const popup = document.getElementById('train-popup');
 const crewList = document.getElementById('train-crew-list');
 const closePopupBtn = document.getElementById('close-popup');
+const logoutBtn = document.getElementById('logout');
 
-async function fetchJson(url, options) {
+// ----------------------
+// Utility Functions
+// ----------------------
+function getUserFromCookie() {
+  const cookieString = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('session='));
+  if (!cookieString) return null;
+
+  try {
+    return JSON.parse(decodeURIComponent(cookieString.split('=')[1]));
+  } catch (err) {
+    console.error('Failed to parse session cookie:', err);
+    return null;
+  }
+}
+
+async function fetchJson(url, options = {}) {
   const res = await fetch(url, options);
   if (!res.ok) throw new Error(`API error ${url} ${res.status}`);
   return res.json();
 }
 
-async function loadSession() {
-  const { user } = await fetchJson('/api/session');
-  if (!user) window.location.href = '/';
-  return user;
-}
+// ----------------------
+// Load Session
+// ----------------------
+const user = getUserFromCookie();
+if (!user) window.location.href = '/index.html';
 
+// Headers with user id
+const headers = {
+  'Content-Type': 'application/json',
+  'x-user-id': user.id
+};
+
+// ----------------------
+// Invites
+// ----------------------
 async function loadInvites() {
-  const invites = await fetchJson('/api/invites');
+  const invites = await fetchJson('/api/invites', { headers });
   invitesContainer.innerHTML = '';
+
   invites.forEach(inv => {
     const div = document.createElement('div');
     div.classList.add('invite-item', 'p-2', 'bg-yellow-100', 'rounded', 'mb-1', 'flex', 'justify-between');
@@ -41,7 +70,7 @@ async function loadInvites() {
     btn.addEventListener('click', async () => {
       await fetchJson('/api/invites', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ group_id: btn.dataset.id, accept: true })
       });
       await loadInvites();
@@ -53,7 +82,7 @@ async function loadInvites() {
     btn.addEventListener('click', async () => {
       await fetchJson('/api/invites', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ group_id: btn.dataset.id, accept: false })
       });
       await loadInvites();
@@ -61,20 +90,28 @@ async function loadInvites() {
   });
 }
 
+// ----------------------
+// Communities
+// ----------------------
 async function loadCommunities() {
-  const communities = await fetchJson('/api/communities');
+  const communities = await fetchJson('/api/communities', { headers });
   communitiesContainer.innerHTML = '';
+
   communities.forEach(c => {
     const div = document.createElement('div');
     div.textContent = c.name;
-    div.classList.add('p-2', 'bg-blue-100', 'rounded');
+    div.classList.add('p-2', 'bg-blue-100', 'rounded', 'mb-1');
     communitiesContainer.appendChild(div);
   });
 }
 
+// ----------------------
+// Trains
+// ----------------------
 async function loadTrains() {
-  const trains = await fetchJson('/api/trains');
+  const trains = await fetchJson('/api/trains', { headers });
   trainsBody.innerHTML = '';
+
   trains.forEach(t => {
     const tr = document.createElement('tr');
     tr.trainData = t;
@@ -95,6 +132,9 @@ async function loadTrains() {
   });
 }
 
+// ----------------------
+// Popup: Train Crew
+// ----------------------
 function showTrainCrew(train) {
   crewList.innerHTML = '';
   train.assignments.forEach(a => {
@@ -107,29 +147,36 @@ function showTrainCrew(train) {
 
 closePopupBtn.addEventListener('click', () => popup.classList.add('hidden'));
 
+// ----------------------
+// Create Community
+// ----------------------
 createCommunityBtn.addEventListener('click', async () => {
   const name = prompt('Community Name:');
   if (!name) return;
   await fetchJson('/api/communities', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ name })
   });
   await loadCommunities();
 });
 
-document.getElementById('logout').addEventListener('click', () => {
-  document.cookie = 'user=;path=/;expires=Thu, 01 Jan 1970 00:00:00 UTC';
-  window.location.href = '/';
+// ----------------------
+// Logout
+// ----------------------
+logoutBtn.addEventListener('click', () => {
+  document.cookie = 'session=;path=/;expires=Thu, 01 Jan 1970 00:00:00 UTC';
+  window.location.href = '/index.html';
 });
 
-// Initial load
+// ----------------------
+// Initial Load + Real-time polling
+// ----------------------
 (async () => {
-  await loadSession();
   await loadInvites();
   await loadCommunities();
   await loadTrains();
-  // Poll every 5 seconds for real-time
+
   setInterval(async () => {
     await loadInvites();
     await loadCommunities();
