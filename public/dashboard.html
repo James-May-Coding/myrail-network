@@ -1,103 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FEC Railways Dashboard</title>
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="module" src="dashboard.js" defer></script>
 </head>
-<body class="dashboard-page">
-  <header class="topbar">
-    <div class="logo">🚂 FEC Railways</div>
-    <div class="user-area">
-      <span id="user-info">Loading...</span>
-      <button id="logout" class="btn small">Logout</button>
+<body class="bg-gray-900 text-white font-sans">
+  <nav class="bg-gray-800 p-4 flex justify-between items-center shadow-lg">
+    <h1 class="text-xl font-semibold">FEC Railways — Control Center</h1>
+    <button id="logout-btn" class="bg-red-600 px-3 py-2 rounded hover:bg-red-700">Logout</button>
+  </nav>
+
+  <main class="p-6">
+    <!-- Community selector -->
+    <div id="community-selector" class="flex flex-wrap items-center space-x-3 mb-6">
+      <select id="community-dropdown" class="px-3 py-2 border rounded text-gray-800"></select>
+      <button id="refresh-communities" class="px-3 py-2 bg-blue-600 rounded hover:bg-blue-700">Refresh</button>
+      <input id="join-code-input" placeholder="Enter Join Code" class="px-3 py-2 border rounded text-gray-800" />
+      <button id="join-community" class="px-3 py-2 bg-green-600 rounded hover:bg-green-700">Join</button>
     </div>
-  </header>
 
-  <main class="content">
-    <section class="card" style="display:flex;gap:24px;align-items:flex-start;">
-      <div style="flex:1">
-        <h3>Invites</h3>
-        <div id="invites-container"></div>
-
-        <h3 style="margin-top:18px">Communities</h3>
-        <div id="communities-container"></div>
-        <button id="create-community" class="btn" style="margin-top:10px">Create Community</button>
-      </div>
-
-      <div style="flex:2">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <h2>Active Trains</h2>
-          <div>
-            <button id="refresh-btn" class="btn small">Refresh</button>
-            <button id="open-admin" class="btn small" title="Open admin panel">Admin Panel</button>
-          </div>
-        </div>
-
-        <div class="table-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Description</th>
-                <th>Direction</th>
-                <th>Yard</th>
-                <th>Crew</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="trains-body"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+    <!-- Content area -->
+    <div id="dashboard-content">
+      <h2 class="text-lg font-bold mb-3">Welcome to your selected community!</h2>
+      <p>Select a community above or join using a code to view its details.</p>
+    </div>
   </main>
-
-  <!-- Admin modal -->
-  <div id="admin-modal" class="popup-frame" style="display:none;">
-    <div class="popup-frame-header">
-      <span id="admin-title">Admin — Manage Trains</span>
-      <button id="admin-close" class="popup-frame-close">✕</button>
-    </div>
-    <div class="popup-frame-body" style="display:flex;gap:16px;">
-      <div style="flex:1">
-        <h4>Create / Edit Train</h4>
-        <label>Group</label>
-        <select id="admin-group"></select>
-        <label>Code</label>
-        <input id="admin-code" />
-        <label>Description</label>
-        <input id="admin-desc" />
-        <label>Direction</label>
-        <input id="admin-direction" />
-        <label>Yard</label>
-        <input id="admin-yard" />
-        <div style="margin-top:8px;">
-          <button id="admin-save" class="btn">Save</button>
-          <button id="admin-delete" class="btn btn-danger">Delete</button>
-        </div>
-      </div>
-
-      <div style="flex:1">
-        <h4>Train Assignments</h4>
-        <div id="admin-assignments" style="max-height:380px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:8px;"></div>
-        <label style="margin-top:8px">Add user by email</label>
-        <input id="assign-email" placeholder="user@example.com" />
-        <label>Role (E, C, etc)</label>
-        <input id="assign-role" placeholder="E" />
-        <div style="margin-top:8px;">
-          <button id="assign-add" class="btn">Add</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- crew popup -->
-  <div id="train-popup" class="popup-frame" style="display:none;">
-    <div class="popup-frame-header"><span>Train Crew</span><button id="close-popup" class="popup-frame-close">✕</button></div>
-    <div class="popup-frame-body" id="train-crew-list"></div>
-  </div>
-
-  <script type="module" src="./dashboard.js"></script>
 </body>
 </html>
