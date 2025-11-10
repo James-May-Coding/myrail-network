@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js';
+import { supabase } from './supabaseClient.js';
 
 const dropdown = document.getElementById('community-dropdown');
 const refreshBtn = document.getElementById('refresh-communities');
