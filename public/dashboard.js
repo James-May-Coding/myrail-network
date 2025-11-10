@@ -27,7 +27,7 @@ async function fetchJson(url, options) {
 
 // Load session (redirect if none)
 async function loadSession() {
-  const session = await fetchJson('/api/auth/session');
+  const session = await fetchJson('/api/auth/session.js');
   if (!session.user) window.location.href = '/';
   return session.user;
 }
@@ -35,7 +35,7 @@ async function loadSession() {
 // Load communities
 async function loadCommunities() {
   dropdown.innerHTML = '';
-  const communities = await fetchJson('/api/communities');
+  const communities = await fetchJson('/api/communities.js');
   if (communities.length === 0) {
     const opt = document.createElement('option');
     opt.textContent = 'No communities joined yet';
@@ -59,7 +59,7 @@ joinBtn.addEventListener('click', async () => {
   const code = joinInput.value.trim();
   if (!code) return alert('Please enter a join code.');
   try {
-    await fetchJson('/api/communities', {
+    await fetchJson('/api/communities.js', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ join_code: code })
