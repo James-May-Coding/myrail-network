@@ -1,13 +1,22 @@
-export default function handler(req, res) {
-  try {
-    const cookies = req.headers.cookie || '';
-    const sessionCookie = cookies.split(';').find(c => c.trim().startsWith('session='));
-    if (!sessionCookie) return res.json({ user: null });
+import { supabase } from '../utils/supabaseClient.js';
 
-    const sessionData = decodeURIComponent(sessionCookie.split('=')[1]);
-    const user = JSON.parse(sessionData);
-    res.json({ user });
+export default async function handler(req, res) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return res.status(200).json({ user: null });
+    }
+
+    // Return stable cookie info
+    res.status(200).json({
+      user: {
+        id: user.id,
+        username: user.user_metadata?.full_name || user.email,
+      }
+    });
   } catch (err) {
-    res.json({ user: null });
+    console.error('Session error:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 }
