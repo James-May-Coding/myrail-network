@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient.js';
 
+// Elements
 const dropdown = document.getElementById('community-dropdown');
 const refreshBtn = document.getElementById('refresh-communities');
 const joinBtn = document.getElementById('join-community');
@@ -7,93 +8,145 @@ const joinInput = document.getElementById('join-code-input');
 const logoutBtn = document.getElementById('logout-btn');
 const dashboardContent = document.getElementById('dashboard-content');
 
-// Simple helper for cookies
+// =============================
+// Cookie Helpers
+// =============================
 function getCookie(name) {
-  return document.cookie.split('; ').find(r => r.startsWith(name + '='))?.split('=')[1];
-}
-function setCookie(name, value) {
-  document.cookie = `${name}=${value}; path=/; SameSite=Lax;`;
+  const value = document.cookie
+    .split('; ')
+    .find(r => r.startsWith(name + '='));
+  return value ? decodeURIComponent(value.split('=')[1]) : null;
 }
 
-// Fetch JSON helper
-async function fetchJson(url, options) {
-  const res = await fetch(url, options);
+function setCookie(name, value, days = 7) {
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax;`;
+}
+
+function clearCookie(name) {
+  document.cookie = `${name}=; Max-Age=0; path=/;`;
+}
+
+// =============================
+// Fetch Helper
+// =============================
+async function fetchJson(url, options = {}) {
+  const res = await fetch(url, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    ...options
+  });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Error ${res.status}: ${text}`);
+    throw new Error(`HTTP ${res.status}: ${text}`);
   }
   return res.json();
 }
 
-// Load session (redirect if none)
+// =============================
+// Session Loading
+// =============================
 async function loadSession() {
-  const session = await fetchJson('/api/session.js');
-  if (!session.user) window.location.href = '/';
-  return session.user;
+  try {
+    const session = await fetchJson('/api/session.js');
+    if (!session?.user) {
+      console.warn('No user session found. Redirecting to login...');
+      window.location.href = '/';
+      return null;
+    }
+    console.log('✅ Logged in as', session.user.username || session.user.id);
+    return session.user;
+  } catch (err) {
+    console.error('Session load error:', err);
+    window.location.href = '/';
+  }
 }
 
-// Load communities
+// =============================
+// Communities
+// =============================
 async function loadCommunities() {
   dropdown.innerHTML = '';
-  const communities = await fetchJson('/api/communities.js');
-  if (communities.length === 0) {
-    const opt = document.createElement('option');
-    opt.textContent = 'No communities joined yet';
-    opt.disabled = true;
-    dropdown.appendChild(opt);
-  } else {
-    for (const c of communities) {
+  try {
+    const communities = await fetchJson('/api/communities.js');
+    if (!Array.isArray(communities) || communities.length === 0) {
+      const opt = document.createElement('option');
+      opt.textContent = 'No communities joined yet';
+      opt.disabled = true;
+      dropdown.appendChild(opt);
+      return;
+    }
+
+    communities.forEach(c => {
       const opt = document.createElement('option');
       opt.value = c.id;
       opt.textContent = c.name;
       dropdown.appendChild(opt);
-    }
-  }
+    });
 
-  const active = getCookie('activeCommunity');
-  if (active && communities.some(c => c.id === active)) dropdown.value = active;
+    const active = getCookie('activeCommunity');
+    if (active && communities.some(c => c.id === active)) dropdown.value = active;
+  } catch (err) {
+    console.error('Failed to load communities:', err);
+    alert('Error loading communities. Please try again.');
+  }
 }
 
-// Join via code
+// =============================
+// Join Community
+// =============================
 joinBtn.addEventListener('click', async () => {
   const code = joinInput.value.trim();
   if (!code) return alert('Please enter a join code.');
+
   try {
     await fetchJson('/api/communities.js', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ join_code: code })
     });
     joinInput.value = '';
     await loadCommunities();
-    alert('Successfully joined new community!');
+    alert('✅ Successfully joined community!');
   } catch (err) {
-    alert('Failed to join community: ' + err.message);
+    alert('❌ Failed to join: ' + err.message);
   }
 });
 
-// Switch community
+// =============================
+// Switch Active Community
+// =============================
 dropdown.addEventListener('change', async () => {
   const id = dropdown.value;
   if (!id) return;
   setCookie('activeCommunity', id);
   const selected = dropdown.options[dropdown.selectedIndex].textContent;
-  dashboardContent.innerHTML = `<h2 class="text-lg font-bold mb-2">${selected}</h2><p>Active community set.</p>`;
+  dashboardContent.innerHTML = `
+    <h2 class="text-lg font-semibold mb-2">${selected}</h2>
+    <p>Active community set.</p>`;
 });
 
-// Refresh
+// =============================
+// Refresh Button
+// =============================
 refreshBtn.addEventListener('click', loadCommunities);
 
+// =============================
 // Logout
+// =============================
 logoutBtn.addEventListener('click', async () => {
-  await supabase.auth.signOut();
-  document.cookie = 'user_id=; path=/; Max-Age=0;';
-  document.cookie = 'activeCommunity=; path=/; Max-Age=0;';
+  try {
+    await supabase.auth.signOut();
+  } catch {}
+  clearCookie('user');
+  clearCookie('activeCommunity');
   window.location.href = '/';
 });
 
-// Initialize
+// =============================
+// Init
+// =============================
 (async () => {
-  await loadSession();
+  const user = await loadSession();
+  if (!user) return;
   await loadCommunities();
 })();
