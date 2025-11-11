@@ -27,7 +27,7 @@ async function fetchJson(url, options) {
 
 // Load session (redirect if none)
 async function loadSession() {
-  const session = await fetchJson('/api/auth/session.js');
+  const session = await fetchJson('/api/session.js');
   if (!session.user) window.location.href = '/';
   return session.user;
 }
