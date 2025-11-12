@@ -1,40 +1,45 @@
-import cookie from 'cookie';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from './utils/supabaseClient.js';
 
-const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+function parseCookies(header) {
+  return Object.fromEntries((header || '').split('; ').map(c => {
+    const [k,v] = c.split('='); return [k,v];
+  }));
+}
 
 export default async function handler(req, res) {
   try {
-    const cookies = cookie.parse(req.headers.cookie || '');
-    const sessionUser = cookies.user ? JSON.parse(cookies.user) : null;
-    if (!sessionUser) return res.status(401).json({ error: 'Not authenticated' });
+    const cookies = parseCookies(req.headers.cookie || '');
+    const token = cookies['sb-access-token'];
+    if (!token) return res.status(401).json({ error: 'Not logged in' });
+
+    const { data: userData } = await supabase.auth.getUser(token);
+    const user = userData?.user;
+    if (!user) return res.status(401).json({ error: 'Not logged in' });
 
     if (req.method === 'GET') {
-      // fetch invites for this user where not yet accepted
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('group_members')
         .select('group_id, role, groups(name)')
-        .eq('user_id', sessionUser.id)
-        .is('role', 'invite'); // temporary role = 'invite'
-      res.status(200).json(data || []);
-    } else if (req.method === 'PATCH') {
-      const { group_id, accept } = req.body;
-      if (!group_id) return res.status(400).json({ error: 'Missing group_id' });
-
-      const newRole = accept ? 'member' : 'denied';
-      await supabase
-        .from('group_members')
-        .update({ role: newRole })
-        .eq('group_id', group_id)
-        .eq('user_id', sessionUser.id);
-
-      res.status(200).json({ success: true });
-    } else {
-      res.setHeader('Allow', ['GET','PATCH']);
-      res.status(405).end(`Method ${req.method} Not Allowed`);
+        .eq('user_id', user.id)
+        .in('role', ['invite','pending']);
+      if (error) throw error;
+      return res.status(200).json(data);
     }
-  } catch(err) {
-    console.error(err);
-    res.status(500).json({ error: 'server error', details: err.message });
+
+    if (req.method === 'PATCH') {
+      const body = await req.json();
+      const { group_id, accept } = body;
+      if (accept) {
+        await supabase.from('group_members').update({ role: 'member' }).eq('group_id', group_id).eq('user_id', user.id);
+      } else {
+        await supabase.from('group_members').delete().eq('group_id', group_id).eq('user_id', user.id);
+      }
+      return res.status(200).json({ success: true });
+    }
+
+    res.status(405).json({ error: 'Method not allowed' });
+  } catch (err) {
+    console.error('invites error', err);
+    res.status(500).json({ error: err.message });
   }
 }

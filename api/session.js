@@ -1,26 +1,20 @@
-import { supabase } from '../utils/supabaseClient.js';
+import { supabase } from './utils/supabaseClient.js';
 
 export default async function handler(req, res) {
   try {
-    const access_token = req.headers.cookie
-      ?.split('; ')
-      .find(c => c.startsWith('sb-access-token='))
-      ?.split('=')[1];
+    const cookies = Object.fromEntries((req.headers.cookie || '').split('; ').map(c => {
+      const [k,v] = c.split('='); return [k, v];
+    }));
+    const token = cookies['sb-access-token'];
+    if (!token) return res.status(200).json({ user: null });
 
-    if (!access_token) {
-      return res.status(200).json({ user: null });
-    }
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return res.status(200).json({ user: null });
 
-    // Get the user from token
-    const { data, error } = await supabase.auth.getUser(access_token);
-
-    if (error || !data?.user) {
-      return res.status(200).json({ user: null });
-    }
-
-    return res.status(200).json({ user: data.user });
+    // return minimal user
+    return res.status(200).json({ user: { id: data.user.id, email: data.user.email, user_metadata: data.user.user_metadata }});
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: 'Server Error' });
+    console.error('session error', e);
+    res.status(500).json({ error: 'server error' });
   }
 }

@@ -1,32 +1,54 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FEC Railways Dashboard</title>
-  <link rel="stylesheet" href="style.css" />
-  <script type="module" src="dashboard.js" defer></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FEC Railways — Dashboard</title>
+  <link rel="stylesheet" href="./style.css" />
 </head>
-<body class="bg-gray-900 text-white font-sans">
-  <nav class="bg-gray-800 p-4 flex justify-between items-center shadow-lg">
-    <h1 class="text-xl font-semibold">FEC Railways — Control Center</h1>
-    <button id="logout-btn" class="bg-red-600 px-3 py-2 rounded hover:bg-red-700">Logout</button>
-  </nav>
+<body>
+  <header>
+    <div style="font-weight:700">🚂 FEC Railways</div>
+    <div id="user-area"><span id="user-info">Loading...</span> <button id="logout-btn" class="btn small">Logout</button></div>
+  </header>
 
-  <main class="p-6">
-    <!-- Community selector -->
-    <div id="community-selector" class="flex flex-wrap items-center space-x-3 mb-6">
-      <select id="community-dropdown" class="px-3 py-2 border rounded text-gray-800"></select>
-      <button id="refresh-communities" class="px-3 py-2 bg-blue-600 rounded hover:bg-blue-700">Refresh</button>
-      <input id="join-code-input" placeholder="Enter Join Code" class="px-3 py-2 border rounded text-gray-800" />
-      <button id="join-community" class="px-3 py-2 bg-green-600 rounded hover:bg-green-700">Join</button>
+  <main class="container">
+    <div class="controls">
+      <select id="community-dropdown"></select>
+      <button id="refresh-communities" class="btn small">Refresh</button>
+      <input id="join-code-input" placeholder="Join code" />
+      <button id="join-community" class="btn small">Join</button>
+      <button id="create-community" class="btn small">Create</button>
     </div>
 
-    <!-- Content area -->
-    <div id="dashboard-content">
-      <h2 class="text-lg font-bold mb-3">Welcome to your selected community!</h2>
-      <p>Select a community above or join using a code to view its details.</p>
+    <div style="display:flex;gap:18px;">
+      <div style="flex:1">
+        <h3>Invites</h3>
+        <div id="invites-container"></div>
+      </div>
+
+      <div style="flex:2">
+        <h3>Trains</h3>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>Code</th><th>Description</th><th>Direction</th><th>Yard</th><th>Crew</th><th>Actions</th></tr></thead>
+            <tbody id="trains-body"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </main>
+
+  <div id="train-popup" class="popup-frame hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <strong id="popup-title">Train Crew</strong>
+      <button id="close-popup" class="btn small">Close</button>
+    </div>
+    <div id="train-crew-list"></div>
+  </div>
+
+  <div class="footer">FEC Railways — Staff Portal</div>
+
+  <script type="module" src="./dashboard.js"></script>
 </body>
 </html>

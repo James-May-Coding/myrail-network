@@ -1,8 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  'https://dmjazdpluclinainckit.supabase.co',
-  process.env.SUPABASE_SERVICE_KEY
+export const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-export { supabase };

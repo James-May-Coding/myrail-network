@@ -1,40 +1,38 @@
 import { supabase } from './supabaseClient.js';
 
-// Cookie helpers
+const loginBtn = document.getElementById('login-btn');
+
+// set cookie helper
 function setCookie(name, value, days = 7) {
   const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; Secure; SameSite=Lax`;
-}
-function getCookie(name) {
-  return document.cookie.split('; ').reduce((r, v) => {
-    const parts = v.split('=');
-    return parts[0] === name ? decodeURIComponent(parts[1]) : r;
-  }, '');
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax;`;
 }
 
-// Login button handler
-document.getElementById('login').addEventListener('click', async () => {
+// Listen for Supabase auth state changes and write tokens to cookies on sign-in.
+// This prevents the race where frontend redirects before supabase restores the session.
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session) {
+    try {
+      setCookie('sb-access-token', session.access_token, 7);
+      setCookie('sb-refresh-token', session.refresh_token, 7);
+      // optional small user cookie for server-side convenience
+      if (session.user?.id) setCookie('user_id', session.user.id, 7);
+      // redirect to dashboard once cookies are set
+      window.location.href = '/dashboard.html';
+    } catch (e) {
+      console.error('Failed to set session cookies', e);
+    }
+  }
+});
+
+// Trigger OAuth via Supabase client. redirectTo dashboard so we handle session there.
+loginBtn.addEventListener('click', async () => {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'discord',
     options: { redirectTo: `${window.location.origin}/dashboard.html` }
   });
-  if (error) alert(error.message);
+  if (error) {
+    console.error('OAuth start error', error);
+    alert('Login failed: ' + error.message);
+  }
 });
-
-// On load: check if session or cookies exist
-(async () => {
-  const { data } = await supabase.auth.getSession();
-  if (data.session) {
-    setCookie('access_token', data.session.access_token);
-    setCookie('refresh_token', data.session.refresh_token);
-    window.location.href = '/dashboard.html';
-    return;
-  }
-
-  const access = getCookie('access_token');
-  const refresh = getCookie('refresh_token');
-  if (access && refresh) {
-    await supabase.auth.setSession({ access_token: access, refresh_token: refresh });
-    window.location.href = '/dashboard.html';
-  }
-})();

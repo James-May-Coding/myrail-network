@@ -1,63 +1,90 @@
-import cookie from 'cookie';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from './utils/supabaseClient.js';
 
-const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+function parseCookies(header) {
+  return Object.fromEntries((header || '').split('; ').map(c => {
+    const [k,v] = c.split('='); return [k,v];
+  }));
+}
 
 export default async function handler(req, res) {
   try {
-    const cookies = cookie.parse(req.headers.cookie || '');
-    const sessionUser = cookies.user ? JSON.parse(cookies.user) : null;
-    if (!sessionUser) return res.status(401).json({ error: 'Not authenticated' });
+    const cookies = parseCookies(req.headers.cookie || '');
+    const token = cookies['sb-access-token'];
+    if (!token) return res.status(401).json({ error: 'Not logged in' });
+
+    const { data: userData } = await supabase.auth.getUser(token);
+    const user = userData?.user;
+    if (!user) return res.status(401).json({ error: 'Not logged in' });
 
     if (req.method === 'GET') {
-      // fetch trains for user's groups
-      const { data: groups } = await supabase
-        .from('group_members')
-        .select('group_id')
-        .eq('user_id', sessionUser.id);
+      const community_id = req.query.community_id;
+      if (!community_id) return res.status(400).json({ error: 'community_id required' });
 
-      const groupIds = groups.map(g => g.group_id);
-      const { data: trains } = await supabase
+      const { data, error } = await supabase
         .from('trains')
-        .select('*, assignments!left(*)')
-        .in('group_id', groupIds);
+        .select(`
+           *,
+           assignments ( id, assignment_role, joined_at, user_id, users: user_id ( id, username, email ) )
+        `)
+        .eq('group_id', community_id)
+        .order('created_at', { ascending: false });
 
-      // attach whether current user can edit/claim
-      const enriched = trains.map(t => {
-        return {
-          ...t,
-          assignments: t.assignments || [],
-          can_edit: true // optional: can add role check here
-        };
+      if (error) throw error;
+      // normalize assignments to expose username/email
+      const out = (data || []).map(t => {
+        t.assignments = (t.assignments || []).map(a => ({
+          id: a.id,
+          assignment_role: a.assignment_role,
+          joined_at: a.joined_at,
+          user_id: a.user_id,
+          username: a.users?.username,
+          email: a.users?.email
+        }));
+        return t;
       });
-
-      res.status(200).json(enriched);
-    } else if (req.method === 'POST') {
-      const { group_id, code, description, direction, yard } = req.body;
-      const { data } = await supabase
-        .from('trains')
-        .insert({ group_id, code, description, direction, yard })
-        .select()
-        .single();
-      res.status(200).json(data);
-    } else if (req.method === 'PATCH') {
-      const { action, train_id, assignment_role } = req.body;
-      if (action === 'claim') {
-        await supabase.from('assignments').insert({
-          train_id,
-          user_id: sessionUser.id,
-          assignment_role: assignment_role || 'E'
-        });
-        res.status(200).json({ success: true });
-      } else {
-        res.status(400).json({ error: 'Unknown action' });
-      }
-    } else {
-      res.setHeader('Allow', ['GET','POST','PATCH']);
-      res.status(405).end(`Method ${req.method} Not Allowed`);
+      return res.status(200).json(out);
     }
+
+    // POST actions: claim/unclaim/create/edit/delete via body.action
+    if (req.method === 'POST') {
+      const body = await req.json();
+      const action = body.action || 'claim';
+
+      if (action === 'claim') {
+        const { train_id, role } = body;
+        await supabase.from('assignments').insert([{ train_id, user_id: user.id, assignment_role: role || 'E' }]);
+        return res.status(200).json({ success: true });
+      }
+
+      if (action === 'unclaim') {
+        const { train_id } = body;
+        await supabase.from('assignments').delete().eq('train_id', train_id).eq('user_id', user.id);
+        return res.status(200).json({ success: true });
+      }
+
+      if (action === 'create') {
+        const payload = { group_id: body.group_id, code: body.code, description: body.description || null, direction: body.direction || null, yard: body.yard || null };
+        const { data, error } = await supabase.from('trains').insert([payload]).select().single();
+        if (error) throw error;
+        return res.status(200).json(data);
+      }
+
+      if (action === 'update') {
+        const { train_id } = body;
+        await supabase.from('trains').update(body.payload).eq('id', train_id);
+        return res.status(200).json({ success: true });
+      }
+
+      if (action === 'delete') {
+        await supabase.from('trains').delete().eq('id', body.train_id);
+        return res.status(200).json({ success: true });
+      }
+    }
+
+    res.status(405).json({ error: 'Method not allowed' });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'server error', details: err.message });
+    console.error('trains error', err);
+    res.status(500).json({ error: err.message });
   }
 }
