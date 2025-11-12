@@ -1,90 +1,86 @@
+// /api/trains.js
 import { supabase } from './utils/supabaseClient.js';
-
-function parseCookies(header) {
-  return Object.fromEntries((header || '').split('; ').map(c => {
-    const [k,v] = c.split('='); return [k,v];
-  }));
-}
+import { parse } from 'cookie';
 
 export default async function handler(req, res) {
   try {
-    const cookies = parseCookies(req.headers.cookie || '');
-    const token = cookies['sb-access-token'];
-    if (!token) return res.status(401).json({ error: 'Not logged in' });
+    const method = req.method.toUpperCase();
 
-    const { data: userData } = await supabase.auth.getUser(token);
-    const user = userData?.user;
-    if (!user) return res.status(401).json({ error: 'Not logged in' });
+    // 🔹 Get community ID from cookie (set when user picks community)
+    const cookies = parse(req.headers.cookie || '');
+    const communityId = cookies.community_id;
 
-    if (req.method === 'GET') {
-      const community_id = req.query.community_id;
-      if (!community_id) return res.status(400).json({ error: 'community_id required' });
+    if (!communityId && method !== 'GET') {
+      return res.status(400).json({ error: 'No community selected' });
+    }
+
+    if (method === 'GET') {
+      if (!communityId) {
+        return res.status(400).json({ error: 'No community selected' });
+      }
 
       const { data, error } = await supabase
         .from('trains')
-        .select(`
-           *,
-           assignments ( id, assignment_role, joined_at, user_id, users: user_id ( id, username, email ) )
-        `)
-        .eq('group_id', community_id)
+        .select('*')
+        .eq('community_id', communityId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      // normalize assignments to expose username/email
-      const out = (data || []).map(t => {
-        t.assignments = (t.assignments || []).map(a => ({
-          id: a.id,
-          assignment_role: a.assignment_role,
-          joined_at: a.joined_at,
-          user_id: a.user_id,
-          username: a.users?.username,
-          email: a.users?.email
-        }));
-        return t;
-      });
-      return res.status(200).json(out);
+      return res.status(200).json(data);
     }
 
-    // POST actions: claim/unclaim/create/edit/delete via body.action
-    if (req.method === 'POST') {
-      const body = await req.json();
-      const action = body.action || 'claim';
+    if (method === 'POST') {
+      const body = await req.json?.() || (await getBody(req));
+      const { train_id, title } = body;
 
-      if (action === 'claim') {
-        const { train_id, role } = body;
-        await supabase.from('assignments').insert([{ train_id, user_id: user.id, assignment_role: role || 'E' }]);
-        return res.status(200).json({ success: true });
+      if (!train_id || !title) {
+        return res.status(400).json({ error: 'Missing train_id or title' });
       }
 
-      if (action === 'unclaim') {
-        const { train_id } = body;
-        await supabase.from('assignments').delete().eq('train_id', train_id).eq('user_id', user.id);
-        return res.status(200).json({ success: true });
-      }
+      const { data, error } = await supabase
+        .from('trains')
+        .insert([{ train_id, title, community_id: communityId }])
+        .select()
+        .single();
 
-      if (action === 'create') {
-        const payload = { group_id: body.group_id, code: body.code, description: body.description || null, direction: body.direction || null, yard: body.yard || null };
-        const { data, error } = await supabase.from('trains').insert([payload]).select().single();
-        if (error) throw error;
-        return res.status(200).json(data);
-      }
-
-      if (action === 'update') {
-        const { train_id } = body;
-        await supabase.from('trains').update(body.payload).eq('id', train_id);
-        return res.status(200).json({ success: true });
-      }
-
-      if (action === 'delete') {
-        await supabase.from('trains').delete().eq('id', body.train_id);
-        return res.status(200).json({ success: true });
-      }
+      if (error) throw error;
+      return res.status(201).json(data);
     }
 
-    res.status(405).json({ error: 'Method not allowed' });
+    if (method === 'PATCH') {
+      const body = await req.json?.() || (await getBody(req));
+      const { train_id, role, user } = body;
 
+      if (!train_id || !role || !user) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      const roleColumn = role === 'engineer' ? 'engineer' : 'conductor';
+      const { data, error } = await supabase
+        .from('trains')
+        .update({ [roleColumn]: user })
+        .eq('train_id', train_id)
+        .eq('community_id', communityId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return res.status(200).json(data);
+    }
+
+    return res.status(405).json({ error: 'method not allowed' });
   } catch (err) {
-    console.error('trains error', err);
-    res.status(500).json({ error: err.message });
+    console.error('Trains API error:', err);
+    return res.status(500).json({ error: 'server error', details: err.message });
+  }
+}
+
+async function getBody(req) {
+  const buffers = [];
+  for await (const chunk of req.body) buffers.push(chunk);
+  try {
+    return JSON.parse(Buffer.concat(buffers).toString());
+  } catch {
+    return {};
   }
 }
