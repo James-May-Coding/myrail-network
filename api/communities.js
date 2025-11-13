@@ -2,51 +2,69 @@ import { supabase } from '../utils/supabaseClient.js';
 
 export default async function handler(req, res) {
   try {
-    if (req.method === 'GET') {
+    // Normalize method
+    const method = req.method?.toUpperCase();
+
+    // Safely parse JSON body
+    let body = {};
+    if (req.headers['content-type']?.includes('application/json')) {
+      try {
+        const text = await new Promise((resolve) => {
+          let data = '';
+          req.on('data', chunk => data += chunk);
+          req.on('end', () => resolve(data));
+        });
+        if (text) body = JSON.parse(text);
+      } catch {
+        // ignore malformed JSON
+      }
+    }
+
+    // --- GET communities ---
+    if (method === 'GET') {
       const { data, error } = await supabase.from('communities').select('*');
       if (error) throw error;
-      res.status(200).json(data);
+      return res.status(200).json(data);
     }
 
-    else if (req.method === 'POST') {
-      const buffers = [];
-      for await (const chunk of req) buffers.push(chunk);
-      const body = JSON.parse(Buffer.concat(buffers).toString());
+    // --- POST create community ---
+    if (method === 'POST') {
       const { name, code } = body;
+      if (!name || !code)
+        return res.status(400).json({ error: 'Missing name or code' });
 
-      if (!name) return res.status(400).json({ error: 'Missing name' });
-      if (!code) return res.status(400).json({ error: 'Missing code' });
+      const { data, error } = await supabase
+        .from('communities')
+        .insert([{ name, code }])
+        .select()
+        .single();
 
-      const { data, error } = await supabase.from('communities').insert([{ name, code }]);
       if (error) throw error;
-      res.status(200).json({ success: true, data });
+      return res.status(200).json(data);
     }
 
-    else if (req.method === 'PUT') {
-      const buffers = [];
-      for await (const chunk of req) buffers.push(chunk);
-      const body = JSON.parse(Buffer.concat(buffers).toString());
-      const { code } = body;
-
-      if (!code) return res.status(400).json({ error: 'Missing code' });
+    // --- PATCH join via code ---
+    if (method === 'PATCH') {
+      const { join_code } = body;
+      if (!join_code)
+        return res.status(400).json({ error: 'Missing join code' });
 
       const { data, error } = await supabase
         .from('communities')
         .select('*')
-        .eq('code', code)
+        .eq('code', join_code)
         .single();
 
-      if (error || !data) return res.status(404).json({ error: 'Invalid community code' });
+      if (error || !data)
+        return res.status(404).json({ error: 'Community not found' });
 
-      // Optionally handle joining logic (e.g. add to members table)
-      res.status(200).json({ success: true, joined: data });
+      return res.status(200).json({ message: 'Joined community', data });
     }
 
-    else {
-      res.status(405).json({ error: 'Method not allowed' });
-    }
+    // --- Fallback ---
+    return res.status(405).json({ error: 'method not allowed' });
   } catch (err) {
-    console.error('Communities error:', err);
-    res.status(500).json({ error: 'server error', details: err.message });
+    console.error('communities error:', err);
+    return res.status(500).json({ error: 'A server error has occurred', details: err.message });
   }
 }
