@@ -2,73 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Railway Dashboard</title>
+  <title>Rail Network Dashboard</title>
   <link rel="stylesheet" href="style.css">
-  <script type="module" src="dashboard.js" defer></script>
 </head>
-<body>
-  <header class="header">
-    <h1>Railway Dashboard</h1>
-    <div id="user-info" class="user-info"></div>
-    <button id="logout-btn" class="btn">Logout</button>
-  </header>
+<body class="dashboard-body">
+  <nav class="top-nav">
+    <h1>Rail Network Dashboard</h1>
+    <span id="user-name" class="user-name">Loading...</span>
+  </nav>
 
-  <main class="main-container">
+  <main class="dashboard-container">
     <section class="communities-section">
-      <h2>Communities</h2>
-      <div class="community-controls">
-        <select id="community-dropdown"></select>
-        <button id="refresh-communities" class="btn small">Refresh</button>
-        <button id="create-community" class="btn small bg-green-600">Create</button>
-      </div>
-      <div class="join-section">
-        <input type="text" id="join-code-input" placeholder="Enter join code">
-        <button id="join-community" class="btn small bg-blue-600">Join</button>
+      <h2>Your Communities</h2>
+      <div id="community-list" class="community-list">
+        <p>Loading communities...</p>
       </div>
     </section>
 
-    <section class="invites-section">
-      <h2>Invites</h2>
-      <div id="invites-container" class="invites-container"></div>
+    <section class="create-section">
+      <h2>Create a Community</h2>
+      <form id="create-form" class="form">
+        <input id="community-name" type="text" placeholder="Community Name" required>
+        <input id="community-code" type="text" placeholder="Community Code" required>
+        <button type="submit">Create</button>
+      </form>
     </section>
 
-    <section class="trains-section">
-      <h2>Trains</h2>
-      <table class="trains-table">
-        <thead>
-          <tr>
-            <th>Code</th>
-            <th>Description</th>
-            <th>Direction</th>
-            <th>Yard</th>
-            <th>Crew</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="trains-body"></tbody>
-      </table>
+    <section class="join-section">
+      <h2>Join via Code</h2>
+      <form id="join-form" class="form">
+        <input id="join-code" type="text" placeholder="Enter Code" required>
+        <button type="submit">Join</button>
+      </form>
     </section>
   </main>
 
-  <!-- Create Community Modal -->
-  <div id="create-popup" class="modal hidden">
-    <div class="modal-content">
-      <h2>Create Community</h2>
-      <input type="text" id="create-name-input" placeholder="Community Name">
-      <div class="modal-actions">
-        <button id="create-cancel" class="btn bg-gray-400">Cancel</button>
-        <button id="create-submit" class="btn bg-blue-600">Create</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Train Crew Popup -->
-  <div id="train-popup" class="modal hidden">
-    <div class="modal-content">
-      <h2 id="popup-title">Train Crew</h2>
-      <div id="train-crew-list"></div>
-      <button id="close-popup" class="btn bg-gray-400 mt-2">Close</button>
-    </div>
-  </div>
+  <script src="dashboard.js"></script>
 </body>
 </html>
