@@ -1,6 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
+// /utils/supabaseClient.js
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(
+  "https://dmjazdpluclinainckit.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtamF6ZHBsdWNsaW5haW5ja2l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyOTYyNDEsImV4cCI6MjA3Nzg3MjI0MX0.BtKwm3wds62gOrabC5lY4561zawTdT_f-o9_frO2TRk"
+);

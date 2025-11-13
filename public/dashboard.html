@@ -2,41 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rail Network Dashboard</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="dashboard-body">
-  <nav class="top-nav">
-    <h1>Rail Network Dashboard</h1>
-    <span id="user-name" class="user-name">Loading...</span>
-  </nav>
+<body>
+  <div class="dashboard-container">
+    <h1>Rail Network Communities</h1>
 
-  <main class="dashboard-container">
-    <section class="communities-section">
-      <h2>Your Communities</h2>
-      <div id="community-list" class="community-list">
-        <p>Loading communities...</p>
-      </div>
-    </section>
+    <div class="community-form">
+      <input id="community-name" type="text" placeholder="Community Name">
+      <button id="create-community">Create</button>
+    </div>
 
-    <section class="create-section">
-      <h2>Create a Community</h2>
-      <form id="create-form" class="form">
-        <input id="community-name" type="text" placeholder="Community Name" required>
-        <input id="community-code" type="text" placeholder="Community Code" required>
-        <button type="submit">Create</button>
-      </form>
-    </section>
+    <div class="join-form">
+      <input id="join-code" type="text" placeholder="Enter Code to Join">
+      <button id="join-community">Join</button>
+    </div>
 
-    <section class="join-section">
-      <h2>Join via Code</h2>
-      <form id="join-form" class="form">
-        <input id="join-code" type="text" placeholder="Enter Code" required>
-        <button type="submit">Join</button>
-      </form>
-    </section>
-  </main>
+    <h2>Your Communities</h2>
+    <div id="communities-list" class="communities"></div>
+  </div>
 
-  <script src="dashboard.js"></script>
+  <script type="module" src="dashboard.js"></script>
 </body>
 </html>
