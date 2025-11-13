@@ -2,36 +2,29 @@ import { supabase } from '../utils/supabaseClient.js';
 
 export default async function handler(req, res) {
   try {
-    // Normalize method
     const method = req.method?.toUpperCase();
 
-    // Safely parse JSON body
-    let body = {};
-    if (req.headers['content-type']?.includes('application/json')) {
-      try {
-        const text = await new Promise((resolve) => {
-          let data = '';
-          req.on('data', chunk => data += chunk);
-          req.on('end', () => resolve(data));
-        });
-        if (text) body = JSON.parse(text);
-      } catch {
-        // ignore malformed JSON
-      }
-    }
-
-    // --- GET communities ---
+    // --- GET: List communities ---
     if (method === 'GET') {
       const { data, error } = await supabase.from('communities').select('*');
       if (error) throw error;
       return res.status(200).json(data);
     }
 
-    // --- POST create community ---
+    // --- POST: Create community ---
     if (method === 'POST') {
-      const { name, code } = body;
-      if (!name || !code)
-        return res.status(400).json({ error: 'Missing name or code' });
+      let body = {};
+      try {
+        body = typeof req.body === 'object' ? req.body : JSON.parse(req.body);
+      } catch {
+        return res.status(400).json({ error: 'Invalid JSON body' });
+      }
+
+      const { name } = body;
+      if (!name) return res.status(400).json({ error: 'Missing name' });
+
+      // Auto-generate join code
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
       const { data, error } = await supabase
         .from('communities')
@@ -40,11 +33,18 @@ export default async function handler(req, res) {
         .single();
 
       if (error) throw error;
-      return res.status(200).json(data);
+      return res.status(200).json({ message: 'Community created', data });
     }
 
-    // --- PATCH join via code ---
+    // --- PATCH: Join via join code ---
     if (method === 'PATCH') {
+      let body = {};
+      try {
+        body = typeof req.body === 'object' ? req.body : JSON.parse(req.body);
+      } catch {
+        return res.status(400).json({ error: 'Invalid JSON body' });
+      }
+
       const { join_code } = body;
       if (!join_code)
         return res.status(400).json({ error: 'Missing join code' });
@@ -53,18 +53,21 @@ export default async function handler(req, res) {
         .from('communities')
         .select('*')
         .eq('code', join_code)
-        .single();
+        .maybeSingle();
 
-      if (error || !data)
+      if (error) throw error;
+      if (!data)
         return res.status(404).json({ error: 'Community not found' });
 
       return res.status(200).json({ message: 'Joined community', data });
     }
 
-    // --- Fallback ---
-    return res.status(405).json({ error: 'method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
-    console.error('communities error:', err);
-    return res.status(500).json({ error: 'A server error has occurred', details: err.message });
+    console.error('communities.js failed:', err);
+    return res.status(500).json({
+      error: 'Server error',
+      details: err.message,
+    });
   }
 }
