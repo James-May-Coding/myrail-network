@@ -1,45 +1,49 @@
-import { supabase } from './utils/supabaseClient.js';
-
-function parseCookies(header) {
-  return Object.fromEntries((header || '').split('; ').map(c => {
-    const [k,v] = c.split('='); return [k,v];
-  }));
-}
+import { supabase } from '../_utils/supabaseClient.js';
 
 export default async function handler(req, res) {
-  try {
-    const cookies = parseCookies(req.headers.cookie || '');
-    const token = cookies['sb-access-token'];
-    if (!token) return res.status(401).json({ error: 'Not logged in' });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-    const { data: userData } = await supabase.auth.getUser(token);
-    const user = userData?.user;
-    if (!user) return res.status(401).json({ error: 'Not logged in' });
+  if (!session) return res.status(401).json({ error: 'Not logged in' });
 
-    if (req.method === 'GET') {
-      const { data, error } = await supabase
-        .from('group_members')
-        .select('group_id, role, groups(name)')
-        .eq('user_id', user.id)
-        .in('role', ['invite','pending']);
-      if (error) throw error;
-      return res.status(200).json(data);
-    }
+  const user_id = session.user.id;
 
-    if (req.method === 'PATCH') {
-      const body = await req.json();
-      const { group_id, accept } = body;
-      if (accept) {
-        await supabase.from('group_members').update({ role: 'member' }).eq('group_id', group_id).eq('user_id', user.id);
-      } else {
-        await supabase.from('group_members').delete().eq('group_id', group_id).eq('user_id', user.id);
-      }
-      return res.status(200).json({ success: true });
-    }
+  // GET — list invites
+  if (req.method === 'GET') {
+    const { data, error } = await supabase
+      .from('community_invites')
+      .select('id, community_id, communities(name)')
+      .eq('user_id', user_id);
 
-    res.status(405).json({ error: 'Method not allowed' });
-  } catch (err) {
-    console.error('invites error', err);
-    res.status(500).json({ error: err.message });
+    if (error) return res.status(500).json({ error: error.message });
+
+    return res.json(data);
   }
+
+  // PATCH — accept invite
+  if (req.method === 'PATCH') {
+    const body = JSON.parse(req.body || '{}');
+    if (!body.community_id)
+      return res.status(400).json({ error: 'Missing community_id' });
+
+    // Add user to community_members
+    await supabase.from('community_members').upsert({
+      community_id: body.community_id,
+      user_id,
+      role: 'member',
+      accepted: true
+    });
+
+    // Delete invite
+    await supabase
+      .from('community_invites')
+      .delete()
+      .eq('community_id', body.community_id)
+      .eq('user_id', user_id);
+
+    return res.json({ success: true });
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }

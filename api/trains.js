@@ -1,86 +1,84 @@
-// /api/trains.js
-import { supabase } from './utils/supabaseClient.js';
-import { parse } from 'cookie';
+import { supabase } from '../_utils/supabaseClient.js';
 
 export default async function handler(req, res) {
-  try {
-    const method = req.method.toUpperCase();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-    // 🔹 Get community ID from cookie (set when user picks community)
-    const cookies = parse(req.headers.cookie || '');
-    const communityId = cookies.community_id;
+  if (!session) return res.status(401).json({ error: 'Not logged in' });
 
-    if (!communityId && method !== 'GET') {
-      return res.status(400).json({ error: 'No community selected' });
-    }
+  const user_id = session.user.id;
 
-    if (method === 'GET') {
-      if (!communityId) {
-        return res.status(400).json({ error: 'No community selected' });
-      }
+  const community_id = req.query.community_id;
 
-      const { data, error } = await supabase
-        .from('trains')
-        .select('*')
-        .eq('community_id', communityId)
-        .order('created_at', { ascending: false });
+  if (!community_id)
+    return res.status(400).json({ error: 'Missing community_id' });
 
-      if (error) throw error;
-      return res.status(200).json(data);
-    }
+  // GET — list trains
+  if (req.method === 'GET') {
+    const { data, error } = await supabase
+      .from('trains')
+      .select('id, code, description, direction, yard')
+      .eq('community_id', community_id);
 
-    if (method === 'POST') {
-      const body = await req.json?.() || (await getBody(req));
-      const { train_id, title } = body;
-
-      if (!train_id || !title) {
-        return res.status(400).json({ error: 'Missing train_id or title' });
-      }
-
-      const { data, error } = await supabase
-        .from('trains')
-        .insert([{ train_id, title, community_id: communityId }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      return res.status(201).json(data);
-    }
-
-    if (method === 'PATCH') {
-      const body = await req.json?.() || (await getBody(req));
-      const { train_id, role, user } = body;
-
-      if (!train_id || !role || !user) {
-        return res.status(400).json({ error: 'Missing required fields' });
-      }
-
-      const roleColumn = role === 'engineer' ? 'engineer' : 'conductor';
-      const { data, error } = await supabase
-        .from('trains')
-        .update({ [roleColumn]: user })
-        .eq('train_id', train_id)
-        .eq('community_id', communityId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return res.status(200).json(data);
-    }
-
-    return res.status(405).json({ error: 'method not allowed' });
-  } catch (err) {
-    console.error('Trains API error:', err);
-    return res.status(500).json({ error: 'server error', details: err.message });
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data);
   }
-}
 
-async function getBody(req) {
-  const buffers = [];
-  for await (const chunk of req.body) buffers.push(chunk);
-  try {
-    return JSON.parse(Buffer.concat(buffers).toString());
-  } catch {
-    return {};
+  // POST — create train
+  if (req.method === 'POST') {
+    const body = JSON.parse(req.body || '{}');
+
+    const { data, error } = await supabase
+      .from('trains')
+      .insert({
+        community_id,
+        code: body.code,
+        description: body.description,
+        direction: body.direction,
+        yard: body.yard
+      })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data);
   }
+
+  // PATCH — update train
+  if (req.method === 'PATCH') {
+    const body = JSON.parse(req.body || '{}');
+
+    const { data, error } = await supabase
+      .from('trains')
+      .update({
+        code: body.code,
+        description: body.description,
+        direction: body.direction,
+        yard: body.yard
+      })
+      .eq('id', body.id)
+      .eq('community_id', community_id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data);
+  }
+
+  // DELETE — remove train
+  if (req.method === 'DELETE') {
+    const body = JSON.parse(req.body || '{}');
+
+    const { error } = await supabase
+      .from('trains')
+      .delete()
+      .eq('id', body.id)
+      .eq('community_id', community_id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ success: true });
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }
