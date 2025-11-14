@@ -7,21 +7,51 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="dashboard-container">
-    <h1>Rail Network Communities</h1>
 
+  <div class="dashboard-container">
+
+    <h1>Rail Network Dashboard</h1>
+    <div id="user-info" class="user-info"></div>
+
+    <!-- CREATE COMMUNITY -->
     <div class="community-form">
       <input id="community-name" type="text" placeholder="Community Name">
       <button id="create-community">Create</button>
     </div>
 
+    <!-- JOIN COMMUNITY -->
     <div class="join-form">
       <input id="join-code" type="text" placeholder="Enter Code to Join">
       <button id="join-community">Join</button>
     </div>
 
+    <!-- SWITCH COMMUNITY -->
     <h2>Your Communities</h2>
-    <div id="communities-list" class="communities"></div>
+    <select id="community-dropdown"></select>
+    <button id="refresh-communities">Refresh</button>
+
+    <!-- TRAIN TABLE -->
+    <h2>Community Trains</h2>
+    <table class="trains-table">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Description</th>
+          <th>Direction</th>
+          <th>Yard</th>
+          <th>Crew</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="trains-body"></tbody>
+    </table>
+
+    <!-- INVITES -->
+    <h2>Pending Invites</h2>
+    <div id="invites-container"></div>
+
+    <button id="logout-btn" class="logout-btn">Logout</button>
+
   </div>
 
   <script type="module" src="dashboard.js"></script>
